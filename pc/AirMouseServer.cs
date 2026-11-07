@@ -459,6 +459,7 @@ namespace AirMouse
         /// 多个源按顺序试，第一个能通的就用（国内直连 raw.githubusercontent 常常不通）。
         /// 发布前把 CHANGE_ME 换成你自己的仓库，和 App 里 Updater.MANIFEST_URLS 保持一致。
         /// </summary>
+        public const string TagsUrl = "https://api.github.com/repos/Tang-Yongqiang/AirMouse/tags?per_page=20";
         public static readonly string[] ManifestUrls =
         {
             "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/update.json",
@@ -472,6 +473,18 @@ namespace AirMouse
         /// </summary>
 
         /// <summary>取语义化版本最大的 tag（形如 v2.28），失败返回 null</summary>
+        private static int ManifestCode(string json)
+        {
+            var ser = new JavaScriptSerializer();
+            var map = ser.Deserialize<Dictionary<string, object>>(json);
+            object v;
+            if (map != null && map.TryGetValue("versionCode", out v) && v != null)
+            {
+                int code;
+                if (int.TryParse(v.ToString(), out code)) return code;
+            }
+            return -1;
+        }
         private void StartUpdateCheck()
         {
             var t = new Thread(() =>
@@ -482,24 +495,59 @@ namespace AirMouse
                     ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11;
                     string json = null;
                     var errors = new StringBuilder();
-                    // 先问 GitHub 的 tag 列表（不走 CDN，发版立刻可见），再按 tag 取那个 tag 的清单；
-                    // jsDelivr 对分支（@main）有整仓快照缓存，最长 12 小时，靠它判断新版本会滞后。
-
-                    var urls = new List<string>();
-                    if (string.IsNullOrEmpty(json)) urls.AddRange(ManifestUrls);
-                    foreach (var url in urls)
+                    // 为什么不是只读 @main：jsDelivr 的分支快照会卡住（实测一直停在旧版本），
+                    // 而按 tag 取是不可变快照、发版后立刻就能拿到。先问 tags 接口，再按 tag 逐个取清单，
+                    // 挑 versionCode 最大的那个（不依赖接口返回顺序）。
+                    try
                     {
-                        try
+                        var tagsJson = Download(TagsUrl);
+                        var ser0 = new JavaScriptSerializer();
+                        var tags = ser0.Deserialize<List<Dictionary<string, object>>>(tagsJson);
+                        int bestCode = -1;
+                        int tried = 0;
+                        foreach (var item in tags)
                         {
-                            json = Download(url);
-                            Log.Write("[i] 更新源可用：" + HostOf(url));
-                            break;
+                            if (tried >= 5) break;
+                            object n;
+                            if (!item.TryGetValue("name", out n) || n == null) continue;
+                            string tag = n.ToString();
+                            if (!tag.StartsWith("v")) continue;
+                            tried++;
+                            string u = "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@" + tag + "/update.json";
+                            try
+                            {
+                                string body = Download(u);
+                                int code = ManifestCode(body);
+                                Log.Write("[i] @" + tag + " versionCode=" + code);
+                                if (code > bestCode) { bestCode = code; json = body; }
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Write("[i] @" + tag + " 不可用 · " + ex.Message);
+                            }
                         }
-                        catch (Exception ex)
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Write("[i] tags 接口不可用 · " + ex.Message);
+                    }
+                    // 兜底：tags 接口不通时按固定清单试一遍（可能偏旧，但总比没有强）
+                    if (string.IsNullOrEmpty(json))
+                    {
+                        foreach (var url in ManifestUrls)
                         {
-                            if (errors.Length > 0) errors.Append("；");
-                            errors.Append(HostOf(url)).Append(" ").Append(ex.Message);
-                            Log.Write("[i] 更新源不可用：" + HostOf(url) + " · " + ex.Message);
+                            try
+                            {
+                                json = Download(url);
+                                Log.Write("[i] 更新源可用：" + HostOf(url));
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                if (errors.Length > 0) errors.Append("；");
+                                errors.Append(HostOf(url)).Append(" ").Append(ex.Message);
+                                Log.Write("[i] 更新源不可用：" + HostOf(url) + " · " + ex.Message);
+                            }
                         }
                     }
                     if (string.IsNullOrEmpty(json))

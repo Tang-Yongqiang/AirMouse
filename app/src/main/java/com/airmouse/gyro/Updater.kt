@@ -35,7 +35,10 @@ object Updater {
     private const val OWNER = "Tang-Yongqiang"
     private const val REPO = "AirMouse"
 
-    // 说明：不再去问 GitHub 的 tags 接口——它按 IP 限流（未登录 60 次/小时），
+    /** GitHub 的 tag 列表接口：不走 CDN，也不受分支快照缓存影响（未登录按 IP 限流 60 次/小时，够用） */
+    private const val TAGS_URL = "https://api.github.com/repos/$OWNER/$REPO/tags?per_page=20"
+
+    // 注意：jsDelivr 的 @main / @latest 分支快照会长期卡住，只能按具体 tag 取。
     // 而且返回顺序不保证；@main 的清单在每次发版时由 publish.ps1 主动 purge，
     // 实测 purge 之后几秒内就是新的，够用了。
 
@@ -74,22 +77,35 @@ object Updater {
             var result: Result = Result(null, "没有可用的源")
             val errors = StringBuilder()
 
-            val urls = ArrayList<String>(MANIFEST_URLS)
-
-            for (url in urls) {
+            // 为什么不是只读 @main：jsDelivr 的分支快照会卡住（我们实测过一直停在旧版本），
+            // 而按 tag 取是不可变快照、发版后立刻就能拿到。所以先问 GitHub 的 tags 接口，
+            // 再按 tag 逐个取清单，挑 versionCode 最大的那个（不依赖接口返回顺序）。
+            val tags = try { fetchTags() } catch (e: Exception) {
+                Diag.warn("UPD", "✗ tags 接口 " + (e.message ?: ""))
+                emptyList()
+            }
+            var best: Info? = null
+            for (t in tags.take(5)) {
+                val url = "https://cdn.jsdelivr.net/gh/$OWNER/$REPO@$t/update.json"
                 try {
-                    val json = fetch(url)
-                    val o = JSONObject(json)
-                    val info = Info(
-                        versionCode = o.optInt("versionCode", 0),
-                        versionName = o.optString("versionName", ""),
-                        apkUrl = o.optString("apk").ifEmpty { null },
-                        exeUrl = o.optString("exe").ifEmpty { null },
-                        notes = o.optString("notes").ifEmpty { null }
-                    )
-                    if (info.versionCode <= 0) throw RuntimeException("update.json 里没有 versionCode")
-                    result = Result(info, null)
+                    val info = parse(fetch(url))
+                    Diag.log("UPD", "✓ @" + t + " versionCode=" + info.versionCode)
+                    if (best == null || info.versionCode > best.versionCode) best = info
+                } catch (e: Exception) {
+                    Diag.warn("UPD", "✗ @" + t + " " + (e.message ?: ""))
+                }
+            }
+            if (best != null) {
+                handler.post { onResult(Result(best, null)) }
+                return@Thread
+            }
+
+            // 兜底：tags 接口不通时，再按固定清单试一遍（可能偏旧，但总比没有强）
+            for (url in MANIFEST_URLS) {
+                try {
+                    val info = parse(fetch(url))
                     Diag.log("UPD", "✓ " + hostOf(url) + " versionCode=" + info.versionCode)
+                    result = Result(info, null)
                     break
                 } catch (e: Exception) {
                     val why = e.javaClass.simpleName + ": " + (e.message ?: "")
@@ -103,19 +119,35 @@ object Updater {
         }.apply { isDaemon = true }.start()
     }
 
-    /**
-     * 取「最近发布」的 tag（形如 v1.0.0）。
-     *
-     * GitHub 的 tags 接口是按时间倒序返回的，所以第一个 v 开头、并且版本号能解析的，
-     * 就是最新发的那个。不按版本号大小挑，是因为版本号可能重新开始编号
-     * （比如内部迭代到 2.34 之后，对外首发叫 1.0.0）。
-     */
+    private fun parse(json: String): Info {
+        val o = JSONObject(json)
+        val info = Info(
+            versionCode = o.optInt("versionCode", 0),
+            versionName = o.optString("versionName", ""),
+            apkUrl = o.optString("apk").ifEmpty { null },
+            exeUrl = o.optString("exe").ifEmpty { null },
+            notes = o.optString("notes").ifEmpty { null }
+        )
+        if (info.versionCode <= 0) throw RuntimeException("update.json 里没有 versionCode")
+        return info
+    }
+
+    /** 取最近发布的若干 tag 名（"v1.0.2" 这种），失败抛异常 */
+    private fun fetchTags(): List<String> {
+        val arr = org.json.JSONArray(fetch(TAGS_URL))
+        val out = ArrayList<String>(arr.length())
+        for (i in 0 until arr.length()) {
+            val name = arr.getJSONObject(i).optString("name")
+            if (name.startsWith("v")) out.add(name)
+        }
+        return out
+    }
+
     private fun hostOf(url: String): String = try {
         URL(url).host ?: url
     } catch (e: Exception) {
         url
     }
-
     private fun fetch(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 6000

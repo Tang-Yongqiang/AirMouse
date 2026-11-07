@@ -1,8 +1,8 @@
 {
-    "versionCode":  51,
-    "versionName":  "1.0.2",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.2/AirMouse-1.0.2.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.2/AirMouseServer-v1.0.2.zip",
-    "notes":  "· 检查更新改回单一 @main 清单（发版时自动刷新），不再依赖 GitHub 接口（有限流、顺序也不保证）\n· 发版脚本自动只保留最近 3 个版本，避免仓库超过 jsDelivr 的 50 MB 上限\n· 版本号三段式：1.0.2",
+    "versionCode":  52,
+    "versionName":  "1.0.3",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.3/AirMouse-1.0.3.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.3/AirMouseServer-v1.0.3.zip",
+    "notes":  "· 版本号改为三段式：1.0.3（对外首个正式版线）\n· 检查更新：先问 GitHub 的 tag 列表，再按具体 tag 取清单（jsDelivr 的分支快照会长期卡住，按 tag 取是即时的）\n· 修复：本机版本比线上新时不再误报「已是最新」\n· 电脑端安装器：安装/卸载分离、安装位置可自选、装完主窗口自动关闭",
     "publishedAt":  "2026-11-07"
 }
