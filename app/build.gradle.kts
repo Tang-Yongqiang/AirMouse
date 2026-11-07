@@ -12,8 +12,8 @@ android {
         applicationId = "com.airmouse.gyro"
         minSdk = 28
         targetSdk = 36
-        versionCode = 37
-        versionName = "2.26"
+        versionCode = 38
+        versionName = "2.27"
     }
 
     signingConfigs {
@@ -30,8 +30,13 @@ android {
             isMinifyEnabled = false
         }
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // 开 R8 + 资源压缩：APK 从 ~10 MB 降到 ~3 MB，更新下载快一个数量级
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("localRelease")
         }
     }

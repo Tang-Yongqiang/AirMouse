@@ -1,8 +1,8 @@
 {
-    "versionCode":  37,
-    "versionName":  "2.26",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.26/AirMouse-2.26.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.26/AirMouseServer-v2.26.zip",
-    "notes":  "· 测试版：验证「检查更新 → 下载 → 安装」全流程\n· 本版无功能改动",
+    "versionCode":  38,
+    "versionName":  "2.27",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.27/AirMouse-2.27.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.27/AirMouseServer-v2.27.zip",
+    "notes":  "· APK 体积从 10 MB 降到 4 MB（开启 R8 代码压缩 + 资源裁剪），更新下载快很多\n· 功能与 2.26 相同",
     "publishedAt":  "2026-11-07"
 }
