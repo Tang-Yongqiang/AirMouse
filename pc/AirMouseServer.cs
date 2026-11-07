@@ -500,18 +500,35 @@ namespace AirMouse
                     try
                     {
                         var cur = typeof(MainForm).Assembly.GetName().Version;
+                        var guessLock = new object();
+                        var guessBest = 0;
+                        var guessBody = "";
+                        var guessTasks = new System.Collections.Generic.List<System.Threading.Thread>();
                         foreach (int step in new int[] { 1, 2, 3, 0, -1, -2 })
                         {
-                            string gt = "v" + cur.Major + "." + cur.Minor + "." + (cur.Build + step);
-                            if (cur.Build + step < 0) continue;
-                            try
+                            int s2 = step;
+                            if (cur.Build + s2 < 0) continue;
+                            var th = new System.Threading.Thread(() =>
                             {
-                                string body = DownloadTagged(gt);
-                                Log.Write("[i] 猜测 @" + gt + " versionCode=" + ManifestCode(body));
-                                if (string.IsNullOrEmpty(json) || ManifestCode(body) > ManifestCode(json)) json = body;
-                            }
-                            catch { }
+                                string gt = "v" + cur.Major + "." + cur.Minor + "." + (cur.Build + s2);
+                                try
+                                {
+                                    string body = DownloadTagged(gt);
+                                    int code = ManifestCode(body);
+                                    lock (guessLock)
+                                    {
+                                        if (code > guessBest) { guessBest = code; guessBody = body; }
+                                    }
+                                    Log.Write("[i] 猜测 @" + gt + " versionCode=" + code);
+                                }
+                                catch { }
+                            });
+                            th.IsBackground = true;
+                            guessTasks.Add(th);
+                            th.Start();
                         }
+                        foreach (var th in guessTasks) th.Join(9000);
+                        if (guessBest > 0) json = guessBody;
                     }
                     catch { }
 

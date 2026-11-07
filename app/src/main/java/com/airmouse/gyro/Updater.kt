@@ -104,6 +104,7 @@ object Updater {
         } catch (e: Exception) {
             0L
         }
+        Diag.log("UPD", "开始检查：本机 $me ($currentCode)")
         val handler = Handler(Looper.getMainLooper())
         Thread {
             var result: Result = Result(null, "没有可用的源")
@@ -129,15 +130,26 @@ object Updater {
                 }
 
             }
-            var bestGuess: Info? = null
+            // 并发去猜：串行的话「不存在的 tag」每条都要等满超时（raw 更是 6 秒），
+            // 实测 6 个 tag 串行要 30 秒，用户早就以为卡死了。
+            val bestGuessRef = java.util.concurrent.atomic.AtomicReference<Info?>(null)
+            val latch = java.util.concurrent.CountDownLatch(guessed.size)
             for (t in guessed) {
-                try {
-                    val info = parse(fetchByTag(t))
-                    Diag.log("UPD", "✓ 猜测 @" + t + " versionCode=" + info.versionCode)
-                    if (bestGuess == null || info.versionCode > bestGuess.versionCode) bestGuess = info
-                } catch (_: Exception) {
-                }
+                Thread {
+                    try {
+                        val info = parse(fetchByTag(t))
+                        Diag.log("UPD", "✓ 猜测 @" + t + " versionCode=" + info.versionCode)
+                        bestGuessRef.getAndUpdate { cur ->
+                            if (cur == null || info.versionCode > cur.versionCode) info else cur
+                        }
+                    } catch (_: Exception) {
+                    } finally {
+                        latch.countDown()
+                    }
+                }.apply { isDaemon = true }.start()
             }
+            latch.await(5, java.util.concurrent.TimeUnit.SECONDS)
+            val bestGuess: Info? = bestGuessRef.get()
             if (bestGuess != null) {
                 handler.post { onResult(Result(bestGuess, null)) }
                 return@Thread
@@ -215,8 +227,8 @@ object Updater {
     }
     private fun fetch(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 6000
-        conn.readTimeout = 6000
+        conn.connectTimeout = 3500
+        conn.readTimeout = 4500
         conn.requestMethod = "GET"
         conn.setRequestProperty("Cache-Control", "no-cache")
         try {
