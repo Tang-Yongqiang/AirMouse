@@ -1,22 +1,19 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 手机外形 -->
+    <!-- 陀螺仪扫过的弧 -->
     <path
-        android:fillColor="#22D3EE"
-        android:pathData="M40,16 L68,16 Q74,16 74,22 L74,86 Q74,92 68,92 L40,92 Q34,92 34,86 L34,22 Q34,16 40,16 Z" />
-
-    <!-- 屏幕 -->
-    <path
-        android:fillColor="#0B0F14"
-        android:pathData="M40,25 L68,25 Q69,25 69,26 L69,82 Q69,83 68,83 L40,83 Q39,83 39,82 L39,26 Q39,25 40,25 Z" />
+        android:pathData="M28,44 A16,16 0 0 1 44,28"
+        android:strokeColor="#FF22D3EE"
+        android:strokeWidth="4"
+        android:strokeLineCap="round" />
 
     <!-- 光标 -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M48,32 L48,64 L55.5,56.5 L59.5,65 L63.5,63 L59.5,54.5 L68,54.5 Z" />
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M48,32 L48,79 L59,68 L66,82 L74,78 L67,64 L80,64 Z" />
 </vector>

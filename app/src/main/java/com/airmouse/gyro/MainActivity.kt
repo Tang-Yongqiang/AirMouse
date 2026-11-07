@@ -126,7 +126,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
 
         prefs = Prefs(this)
         mode = prefs.mode
-        Diag.logEnv(this, versionLabel())
+        Diag.logEnv(this, versionLabelFull())
 
         statusDot = findViewById(R.id.statusDot)
         statusBox = findViewById(R.id.statusBox)
@@ -1321,7 +1321,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         wrap.addView(portEdit, LinearLayout.LayoutParams(-1, -2))
 
         val tip = TextView(this)
-        tip.text = "电脑上运行 python pc/airmouse_server.py\n本机 IP：" + localIp()
+        tip.text = "电脑上双击 AirMouseSetup.exe 装好接收端就行\n本机 IP：" + localIp()
         tip.setTextColor(ContextCompat.getColor(this, R.color.text_dim))
         tip.textSize = 11f
         tip.setPadding(0, pad / 2, 0, 0)
@@ -1352,7 +1352,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
     private fun showUsbInfo() {
         val msg = "USB 模式只走数据线，不经过路由器：\n\n" +
             "1. 手机用数据线连电脑，打开「USB 调试」并允许这台电脑。\n" +
-            "2. 电脑上运行 pc/airmouse_server.py（接收端会自动执行 adb reverse，把手机的 127.0.0.1:47777 转到电脑）。\n" +
+            "2. 电脑上双击 AirMouseSetup.exe，装完它就在托盘区/任务栏跑着（无需 Python）。\n" +
             "3. 手机这边只要插着线就会连上，状态显示「USB · 127.0.0.1:47777」。\n\n" +
             "连不上时：看电脑端日志有没有「USB 通道已就绪」；没有的话手动执行\n" +
             "adb reverse tcp:" + prefs.port + " tcp:" + prefs.port
@@ -1489,7 +1489,15 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         sheet.show()
     }
 
+    /** 界面上只显示版本名（如 1.0.4），版本码只留给诊断日志 */
     private fun versionLabel(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0"
+    } catch (e: Exception) {
+        "1.0"
+    }
+
+    /** 诊断日志用：版本名 + 版本码 */
+    private fun versionLabelFull(): String = try {
         val pi = packageManager.getPackageInfo(packageName, 0)
         pi.versionName + " · " + pi.longVersionCode
     } catch (e: Exception) {

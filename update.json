@@ -1,8 +1,8 @@
 {
-    "versionCode":  53,
-    "versionName":  "1.0.4",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.4/AirMouse-1.0.4.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.4/AirMouseServer-v1.0.4.zip",
-    "notes":  "· 版本号三段式，对外首个正式版：1.0.4\n· 检查更新改为「先猜下一个版本号（不碰缓存）→ 再问 tag 列表 → 最后退回固定清单」，发版后立刻可见\n· 手机端：检查更新 → 应用内下载（进度/速度/可后台）→ 一键安装\n· 电脑端：单个安装程序（内嵌接收端、需管理员、装完自启）",
+    "versionCode":  54,
+    "versionName":  "1.0.5",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.5/AirMouse-1.0.5.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.5/AirMouseServer-v1.0.5.zip",
+    "notes":  "· 全新图标：深蓝底 + 白色光标 + 青色陀螺仪弧线（支持 Android 13 主题图标）\n· 界面不再显示版本码，只显示 1.0.x；版本码仍记在诊断日志里\n· 修掉「电脑上运行 python 脚本」的过期指引，统一成「双击 AirMouseSetup.exe」\n· 手机内下载进度/速度 + 一键安装（沿用 1.0.4）",
     "publishedAt":  "2026-11-07"
 }
