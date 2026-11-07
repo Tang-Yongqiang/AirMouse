@@ -399,16 +399,18 @@ namespace AirMouse
         private static string BuildPath()
         {
             var candidates = new List<string>();
-            try
-            {
-                string la = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                if (!string.IsNullOrEmpty(la)) candidates.Add(Path.Combine(Path.Combine(la, "AirMouse"), "exe.log"));
-            }
-            catch { }
+            // 优先写 exe 同目录：装到 Program Files 后本进程是管理员，写得进去；
+            // 而 %LOCALAPPDATA% 在本机实测会被安全软件拒（未签名进程写用户目录）。
             try
             {
                 string dir = Path.GetDirectoryName(Application.ExecutablePath);
                 if (!string.IsNullOrEmpty(dir)) candidates.Add(Path.Combine(dir, "AirMouseServer.log"));
+            }
+            catch { }
+            try
+            {
+                string la = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                if (!string.IsNullOrEmpty(la)) candidates.Add(Path.Combine(Path.Combine(la, "AirMouse"), "exe.log"));
             }
             catch { }
             try { candidates.Add(Path.Combine(Path.GetTempPath(), "AirMouseServer.log")); } catch { }

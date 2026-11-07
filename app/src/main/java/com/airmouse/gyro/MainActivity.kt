@@ -915,7 +915,10 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             if (!enabled) return@runOnUiThread
             statusTitle.text = when (state) {
                 NetInput.State.CONNECTED -> "已连接"
-                NetInput.State.CONNECTING -> "正在连接…"
+                NetInput.State.CONNECTING ->
+                    if (net.failedAttempts > 0 && net.maxAttempts > 0)
+                        "正在重连 第 ${net.failedAttempts + 1}/${net.maxAttempts} 次…"
+                    else "正在连接…"
                 NetInput.State.FAILED -> "连接失败 · 点这里重连"
                 NetInput.State.ERROR -> "连接异常 · 点这里重连"
                 else -> "网络模式"
@@ -1416,9 +1419,13 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                 if (info == null) {
                     tvUpdate.text = "当前 " + versionLabel()
                     toast("检查失败：" + (r.error ?: "网络不通"))
-                } else if (info.versionCode <= currentVersionCode()) {
+                } else if (info.versionCode.toLong() == currentVersionCode()) {
                     tvUpdate.text = "当前 " + versionLabel() + "（已是最新）"
                     toast("已是最新版本 " + info.versionName)
+                } else if (info.versionCode.toLong() < currentVersionCode()) {
+                    // 线上还没有更新：本机这份比发布版新（自己编的测试版）
+                    tvUpdate.text = "当前 " + versionLabel()
+                    toast("线上最新是 " + info.versionName + "，你装的 " + versionLabel() + " 更新")
                 } else {
                     tvUpdate.text = "当前 " + versionLabel()
                     showSheet(

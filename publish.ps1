@@ -49,15 +49,39 @@ Copy-Item $apkSrc $apkOut -Force
 
 $exeOut = Join-Path $root 'dist\AirMouseServer.exe'
 $hookOut = Join-Path $root 'dist\AirMouseHook.dll'
-Get-Process AirMouseServer -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process AirMouseServer -ErrorAction SilentlyContinue | ForEach-Object { try { $_.Kill() } catch { } }
+Start-Sleep -Milliseconds 400
 # 注入宿主 DLL（由 powershell.exe 加载执行，见 pc\InjectorChild.cs）
 & $Csc /nologo /target:library /optimize+ /out:"$hookOut" "$root\pc\InjectorChild.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc 编译 AirMouseHook.dll 失败" }
+$exeTmp = Join-Path $root 'dist\_server_new.exe'
+Remove-Item $exeTmp -Force -ErrorAction SilentlyContinue
 & $Csc /nologo /target:winexe /codepage:65001 /optimize+ /r:System.Web.Extensions.dll `
     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.CSharp.dll `
-    /win32icon:"$root\pc\airmouse.ico" /win32manifest:"$root\pc\app.manifest" /out:"$exeOut" `
+    /win32icon:"$root\pc\airmouse.ico" /win32manifest:"$root\pc\app.manifest" /out:"$exeTmp" `
     "$root\pc\AirMouseServer.cs" "$root\pc\InjectorHost.cs" "$root\pc\AssemblyInfo.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc 编译失败" }
+$copied = $false
+for ($i = 1; $i -le 15; $i++) {
+    try { Copy-Item $exeTmp $exeOut -Force -ErrorAction Stop; $copied = $true; break } catch { Start-Sleep -Milliseconds 300 }
+}
+if (-not $copied) { Write-Host "[!] 接收端正在运行，沿用现有的 dist\AirMouseServer.exe（本次 exe 代码没变，可以继续发版）" -ForegroundColor Yellow }
+Remove-Item $exeTmp -Force -ErrorAction SilentlyContinue
+
+# 卸载器 + 安装器（安装器把 server / hook / 卸载器 三个都内嵌进去）
+$uninOut = Join-Path $root 'dist\AirMouseUninstall.exe'
+$setupOut = Join-Path $root 'dist\AirMouseSetup.exe'
+& $Csc /nologo /target:winexe /codepage:65001 /optimize+ /define:UNINSTALL_ONLY `
+    /r:System.Windows.Forms.dll /r:System.Drawing.dll `
+    /win32icon:"$root\pc\airmouse.ico" /win32manifest:"$root\pc\app.manifest" `
+    /out:"$uninOut" "$root\pc\Setup.cs"
+if ($LASTEXITCODE -ne 0) { throw "csc 编译卸载器失败" }
+& $Csc /nologo /target:winexe /codepage:65001 /optimize+ `
+    /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll `
+    /win32icon:"$root\pc\airmouse.ico" /win32manifest:"$root\pc\app.manifest" `
+    /resource:"$exeOut",payload_server /resource:"$hookOut",payload_hook /resource:"$uninOut",payload_uninstall `
+    /out:"$setupOut" "$root\pc\Setup.cs"
+if ($LASTEXITCODE -ne 0) { throw "csc 编译安装器失败" }
 Write-Host "[2/7] 编译完成：APK $([math]::Round((Get-Item $apkOut).Length/1MB,2)) MB / EXE $((Get-Item $exeOut).Length) B / DLL $((Get-Item $hookOut).Length) B" -ForegroundColor Cyan
 
 # 3) 放进 releases/vX.Y，并给 exe 打一个 zip（jsDelivr 不允许 .exe 直链）
@@ -66,9 +90,11 @@ New-Item -ItemType Directory -Path $rel -Force | Out-Null
 Copy-Item $apkOut (Join-Path $rel "AirMouse-$Version.apk") -Force
 Copy-Item $exeOut (Join-Path $rel 'AirMouseServer.exe') -Force
 Copy-Item $hookOut (Join-Path $rel 'AirMouseHook.dll') -Force
+Copy-Item $setupOut (Join-Path $rel 'AirMouseSetup.exe') -Force
+Copy-Item $uninOut (Join-Path $rel 'AirMouseUninstall.exe') -Force
 $exeZip = Join-Path $rel "AirMouseServer-v$Version.zip"
 Remove-Item $exeZip -Force -ErrorAction SilentlyContinue
-Compress-Archive -Path (Join-Path $rel 'AirMouseServer.exe'), (Join-Path $rel 'AirMouseHook.dll') -DestinationPath $exeZip -CompressionLevel Optimal
+Compress-Archive -Path (Join-Path $rel 'AirMouseServer.exe'), (Join-Path $rel 'AirMouseHook.dll'), (Join-Path $rel 'AirMouseSetup.exe'), (Join-Path $rel 'AirMouseUninstall.exe') -DestinationPath $exeZip -CompressionLevel Optimal
 Write-Host "[3/7] 已放入 releases\v$Version" -ForegroundColor Cyan
 
 # 4) update.json

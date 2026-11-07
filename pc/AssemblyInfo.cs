@@ -6,6 +6,6 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyProduct("AirMouse")]
 [assembly: AssemblyCompany("AirMouse")]
 [assembly: AssemblyCopyright("Copyright © 2026")]
-[assembly: AssemblyVersion("2.31.0.0")]
-[assembly: AssemblyFileVersion("2.31.0.0")]
+[assembly: AssemblyVersion("2.33.0.0")]
+[assembly: AssemblyFileVersion("2.33.0.0")]
 [assembly: ComVisible(false)]

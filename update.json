@@ -1,8 +1,8 @@
 {
-    "versionCode":  42,
-    "versionName":  "2.31",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.31/AirMouse-2.31.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.31/AirMouseServer-v2.31.zip",
-    "notes":  " 接收端改为必须管理员权限运行（未提权时最小化/切后台会无法控制鼠标）；开机自启改用计划任务（最高权限，登录不弹 UAC）；启动时自动添加防火墙放行规则；功能与 2.30 相同",
+    "versionCode":  47,
+    "versionName":  "2.33",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.33/AirMouse-2.33.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.33/AirMouseServer-v2.33.zip",
+    "notes":  "· 修复：本机版本比线上新时，检查更新不再说「已是最新」（会提示线上最新是哪个）\n· 安装器：安装/卸载拆成两个程序，安装位置可自选（含 D 盘）\n· 安装完成后主窗口自动消失，只留「✓ 安装完成」\n· 重连最多 10 次，期间标题显示第几次",
     "publishedAt":  "2026-11-07"
 }

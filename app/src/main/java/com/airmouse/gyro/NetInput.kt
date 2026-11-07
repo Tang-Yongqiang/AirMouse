@@ -86,6 +86,14 @@ class NetInput : InputSink {
     @Volatile
     var maxAttempts = 10
 
+    /** 上一次连上的时刻：用来判断「连上又被立刻踢掉」也算一次失败 */
+    @Volatile
+    private var connectedAt = 0L
+
+    /** 最近一次失败的中文原因，直接拼进状态栏那行字 */
+    @Volatile
+    private var lastReason = ""
+
     /** 用户点「重连」：清零计数，线程还活着就让它接着试，已经停了就重新起一个 */
     fun retryNow() {
         failedAttempts = 0
@@ -128,20 +136,10 @@ class NetInput : InputSink {
             if (socket == null) {
                 if (!tryConnect()) {
                     // 连续失败到上限就停下等人点「重连」，别在后台无限刷（耗电、刷日志、看着像卡死）
-                    failedAttempts++
-                    if (maxAttempts > 0 && failedAttempts >= maxAttempts) {
-                        running = false
-                        publish(
-                            State.FAILED,
-                            "连不上 $target，已试 $failedAttempts 次，已暂停自动重试 · 点这里重连"
-                        )
-                        Diag.warn("NET", "已停止重试（$failedAttempts 次）")
-                        return
-                    }
+                    if (!registerFailure(target)) return
                     sleepQuiet(1500)
                     continue
                 }
-                failedAttempts = 0
             }
             try {
                 val line = queue.poll(1, TimeUnit.SECONDS)
@@ -160,10 +158,43 @@ class NetInput : InputSink {
             } catch (e: Exception) {
                 Log.w(TAG, "send failed: ${e.message}")
                 Diag.warn("NET", "发送失败: ${e.message}")
-                publish(State.ERROR, "连接被中断，正在重连…")
                 closeSocket()
             }
         }
+    }
+
+    /**
+     * 记一次失败：没到上限就把状态栏改成「正在重连 第 N/10 次」（不再显示「点这里重连」，
+     * 因为这时候还在自动重试，点它没意义）；到上限才切到 FAILED 并返回 false 让循环退出。
+     */
+    private fun registerFailure(target: String): Boolean {
+        failedAttempts++
+        if (maxAttempts > 0 && failedAttempts >= maxAttempts) {
+            running = false
+            publish(
+                State.FAILED,
+                "连不上 $target，已试 $failedAttempts 次，已暂停自动重试 · 点这里重连"
+            )
+            Diag.warn("NET", "已停止重试（$failedAttempts 次）")
+            return false
+        }
+        publish(State.CONNECTING, retryText())
+        return true
+    }
+
+    /** 「第 3/10 次 · 连接被拒」——次数在标题里，这里只补原因，避免重复 */
+    private fun retryText(): String {
+        val nth = if (maxAttempts > 0) "第 ${failedAttempts + 1}/$maxAttempts 次" else "第 ${failedAttempts + 1} 次"
+        return if (lastReason.isEmpty()) nth else "$nth · $lastReason"
+    }
+
+    /** 把异常翻成一句人话，状态栏放得下 */
+    private fun shortReason(e: Exception): String = when (e) {
+        is java.net.SocketTimeoutException -> "连接超时"
+        is java.net.ConnectException -> "连接被拒（电脑端没启动？）"
+        is java.net.UnknownHostException -> "地址解析失败"
+        is java.net.NoRouteToHostException -> "网络不可达"
+        else -> (e.message ?: e.javaClass.simpleName).take(40)
     }
 
     /**
@@ -181,8 +212,18 @@ class NetInput : InputSink {
             } catch (_: Exception) {
             } finally {
                 if (socket === s) {
+                    // 连上不到 3 秒就被断开，和「压根连不上」一样算一次失败；
+                    // 否则 USB 隧道在、电脑端没启动时会出现「连上→立刻断→重连」无限循环
+                    val lived = System.currentTimeMillis() - connectedAt
                     closeSocket()
-                    if (running) publish(State.ERROR, "电脑端断开了，正在重连…")
+                    if (running) {
+                        if (lived in 0..3000) {
+                            if (!registerFailure(if (usbMode) LOOPBACK else host)) return@Thread
+                        } else {
+                            failedAttempts = 0
+                            publish(State.CONNECTING, "电脑端断开了，正在重连…")
+                        }
+                    }
                 }
             }
         }, "airmouse-net-read")
@@ -192,13 +233,13 @@ class NetInput : InputSink {
 
     private fun tryConnect(): Boolean {
         val target = if (usbMode) LOOPBACK else host
-        publish(State.CONNECTING, if (usbMode) "正在连接 USB（$target:$port）…" else "正在连接 $target:$port …")
         return try {
             val s = Socket()
             s.tcpNoDelay = true
             s.keepAlive = true
             s.connect(InetSocketAddress(target, port), 2500)
             socket = s
+            connectedAt = System.currentTimeMillis()
             writer = BufferedWriter(OutputStreamWriter(s.getOutputStream(), Charsets.UTF_8))
             // 断线期间攒下的旧指令没必要补发，否则一连上光标会突然跳一下
             queue.clear()
@@ -214,14 +255,8 @@ class NetInput : InputSink {
                 diagLastError = reason
                 Diag.warn("NET", (if (usbMode) "USB" else "WiFi") + " 连不上 $target:$port · $reason")
             }
-            if (usbMode) {
-                publish(
-                    State.ERROR,
-                    "USB 连不上：确认数据线已插好、手机允许了「USB 调试」，电脑端接收端已启动"
-                )
-            } else {
-                publish(State.ERROR, "连不上 $target:$port，请确认电脑端程序已启动、手机在同一 WiFi")
-            }
+            // 这里不直接 publish(ERROR)：还在自动重试，由 registerFailure() 统一显示「正在重连 第 N 次」
+            lastReason = if (usbMode) "USB 没通（查数据线 / USB 调试授权）" else shortReason(e)
             false
         }
     }
