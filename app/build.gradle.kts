@@ -12,8 +12,8 @@ android {
         applicationId = "com.airmouse.gyro"
         minSdk = 28
         targetSdk = 36
-        versionCode = 55
-        versionName = "1.0.6"
+        versionCode = 56
+        versionName = "1.0.7"
     }
 
     signingConfigs {

@@ -71,6 +71,25 @@ object Updater {
         check(ctx, onResult)
     }
 
+    /**
+     * 按 tag 取清单：先 jsDelivr（快），失败再 raw.githubusercontent（刚推的新 tag 在 jsDelivr 上
+     * 可能要几分钟才索引到，raw 是 Git 服务器直出、立即可用，只是慢一点、国内偶尔被墙）。
+     */
+    private fun fetchByTag(tag: String): String {
+        var last: Exception? = null
+        for (u in listOf(
+            "https://cdn.jsdelivr.net/gh/$OWNER/$REPO@$tag/update.json",
+            "https://raw.githubusercontent.com/$OWNER/$REPO/$tag/update.json",
+            "https://gitee.com/$OWNER/$REPO/raw/$tag/update.json"
+        )) {
+            try {
+                return fetch(u)
+            } catch (e: Exception) {
+                last = e
+            }
+        }
+        throw last ?: RuntimeException("no source")
+    }
     /** 本机版本名，例如 1.0.3（用来往后猜下一个版本） */
     private fun myVersionName(ctx: Context): String = try {
         ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0.0.0"
@@ -80,6 +99,11 @@ object Updater {
 
     private fun check(ctx: Context, onResult: (Result) -> Unit) {
         val me = myVersionName(ctx)
+        val currentCode: Long = try {
+            ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
+        } catch (e: Exception) {
+            0L
+        }
         val handler = Handler(Looper.getMainLooper())
         Thread {
             var result: Result = Result(null, "没有可用的源")
@@ -108,7 +132,7 @@ object Updater {
             var bestGuess: Info? = null
             for (t in guessed) {
                 try {
-                    val info = parse(fetch("https://cdn.jsdelivr.net/gh/$OWNER/$REPO@$t/update.json"))
+                    val info = parse(fetchByTag(t))
                     Diag.log("UPD", "✓ 猜测 @" + t + " versionCode=" + info.versionCode)
                     if (bestGuess == null || info.versionCode > bestGuess.versionCode) bestGuess = info
                 } catch (_: Exception) {
@@ -125,9 +149,8 @@ object Updater {
             }
             var best: Info? = null
             for (t in tags.take(5)) {
-                val url = "https://cdn.jsdelivr.net/gh/$OWNER/$REPO@$t/update.json"
                 try {
-                    val info = parse(fetch(url))
+                    val info = parse(fetchByTag(t))
                     Diag.log("UPD", "✓ @" + t + " versionCode=" + info.versionCode)
                     if (best == null || info.versionCode > best.versionCode) best = info
                 } catch (e: Exception) {
@@ -144,7 +167,10 @@ object Updater {
                 try {
                     val info = parse(fetch(url))
                     Diag.log("UPD", "✓ " + hostOf(url) + " versionCode=" + info.versionCode)
-                    result = Result(info, null)
+                    // 固定清单是分支快照，可能比本机还旧：那样只能说明「没有可用信息」，
+                    // 不能拿去告诉用户「线上最新是 X」（X 比他还旧），否则就成了误报。
+                    if (info.versionCode.toLong() >= currentCode) result = Result(info, null)
+                    else errors.append("清单偏旧(").append(info.versionName).append(") ")
                     break
                 } catch (e: Exception) {
                     val why = e.javaClass.simpleName + ": " + (e.message ?: "")

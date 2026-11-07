@@ -504,10 +504,9 @@ namespace AirMouse
                         {
                             string gt = "v" + cur.Major + "." + cur.Minor + "." + (cur.Build + step);
                             if (cur.Build + step < 0) continue;
-                            string gu = "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@" + gt + "/update.json";
                             try
                             {
-                                string body = Download(gu);
+                                string body = DownloadTagged(gt);
                                 Log.Write("[i] 猜测 @" + gt + " versionCode=" + ManifestCode(body));
                                 if (string.IsNullOrEmpty(json) || ManifestCode(body) > ManifestCode(json)) json = body;
                             }
@@ -536,10 +535,9 @@ namespace AirMouse
                             string tag = n.ToString();
                             if (!tag.StartsWith("v")) continue;
                             tried++;
-                            string u = "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@" + tag + "/update.json";
                             try
                             {
-                                string body = Download(u);
+                                string body = DownloadTagged(tag);
                                 int code = ManifestCode(body);
                                 Log.Write("[i] @" + tag + " versionCode=" + code);
                                 if (code > bestCode) { bestCode = code; json = body; }
@@ -607,6 +605,26 @@ namespace AirMouse
         }
 
         /// <summary>带超时的下载：WebClient 没有超时，网络卡住会一直挂着</summary>
+        /// <summary>
+        /// 按 tag 取清单：先 jsDelivr（快），失败再 raw.githubusercontent（新 tag 在 jsDelivr 上
+        /// 要几分钟才索引到，raw 立即可用、只是慢一点），最后退回 gitee 镜像。
+        /// </summary>
+        private static string DownloadTagged(string tag)
+        {
+            Exception last = null;
+            string[] urls =
+            {
+                "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@" + tag + "/update.json",
+                "https://raw.githubusercontent.com/Tang-Yongqiang/AirMouse/" + tag + "/update.json",
+                "https://gitee.com/Tang-Yongqiang/AirMouse/raw/" + tag + "/update.json"
+            };
+            foreach (var u in urls)
+            {
+                try { return Download(u); }
+                catch (Exception ex) { last = ex; }
+            }
+            throw last ?? new Exception("no source");
+        }
         private static string Download(string url)
         {
             var req = (HttpWebRequest)WebRequest.Create(url);

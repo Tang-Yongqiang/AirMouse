@@ -1,8 +1,8 @@
 {
-    "versionCode":  55,
-    "versionName":  "1.0.6",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.6/AirMouse-1.0.6.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.6/AirMouseServer-v1.0.6.zip",
-    "notes":  "· 修「检查更新」误报：已经是最新时不再被 CDN 缓存里的旧清单骗到（先比本机版本，再猜相邻版本）\n· 图标、版本码显示、指引文案沿用 1.0.5",
+    "versionCode":  56,
+    "versionName":  "1.0.7",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.7/AirMouse-1.0.7.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.7/AirMouseServer-v1.0.7.zip",
+    "notes":  "· 修「检查更新」：按 tag 取清单时先 jsDelivr、失败自动换 GitHub raw，新版本刚发也能立刻查到\n· 修误报：比本机还旧的清单不再当作「线上最新」，直接说「已是最新」\n· 两端同步",
     "publishedAt":  "2026-11-07"
 }
