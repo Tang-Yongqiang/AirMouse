@@ -1,8 +1,8 @@
 {
-    "versionCode":  50,
-    "versionName":  "1.0.1",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.1/AirMouse-1.0.1.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.1/AirMouseServer-v1.0.1.zip",
-    "notes":  "· 修正：检查更新改为先读仓库里的 latest.txt（不走 CDN、不受接口限流），发版后立刻可见\n· 首个正式版 1.0.0 的全部内容",
+    "versionCode":  51,
+    "versionName":  "1.0.2",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.2/AirMouse-1.0.2.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.2/AirMouseServer-v1.0.2.zip",
+    "notes":  "· 检查更新改回单一 @main 清单（发版时自动刷新），不再依赖 GitHub 接口（有限流、顺序也不保证）\n· 发版脚本自动只保留最近 3 个版本，避免仓库超过 jsDelivr 的 50 MB 上限\n· 版本号三段式：1.0.2",
     "publishedAt":  "2026-11-07"
 }

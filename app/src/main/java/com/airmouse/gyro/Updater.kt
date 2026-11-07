@@ -27,7 +27,7 @@ object Updater {
      * 发布前把 CHANGE_ME / <账号> 换成你自己的。
      */
     val MANIFEST_URLS = listOf(
-        "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@latest/update.json",
+        "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/update.json",
         "https://raw.githubusercontent.com/Tang-Yongqiang/AirMouse/main/update.json",
         "https://gitee.com/Tang-Yongqiang/AirMouse/raw/main/update.json"
     )
@@ -35,14 +35,9 @@ object Updater {
     private const val OWNER = "Tang-Yongqiang"
     private const val REPO = "AirMouse"
 
-    /**
-     * GitHub 的 tag 列表接口。它不走 CDN，所以**发版后立刻就能看到新 tag**，
-     * 而 jsDelivr 的分支（@main）快照会被缓存最长 12 小时——这就是「明明发了新版，
-     * App 还说已是最新」的根因。所以先问 tag，再按 tag 去 jsDelivr 取那个 tag 的清单
-     * （tag 是不可变快照，路径天然带版本，不会被旧缓存命中）。
-     */
-    private const val TAGS_URL = "https://api.github.com/repos/$OWNER/$REPO/tags?per_page=100"
-    private const val LATEST_TAG_URL = "https://raw.githubusercontent.com/$OWNER/$REPO/main/latest.txt"
+    // 说明：不再去问 GitHub 的 tags 接口——它按 IP 限流（未登录 60 次/小时），
+    // 而且返回顺序不保证；@main 的清单在每次发版时由 publish.ps1 主动 purge，
+    // 实测 purge 之后几秒内就是新的，够用了。
 
     data class Info(
         val versionCode: Int,
@@ -79,17 +74,7 @@ object Updater {
             var result: Result = Result(null, "没有可用的源")
             val errors = StringBuilder()
 
-            // 第一步：问 GitHub 最新 tag（不走 CDN，无缓存）
-            val tag = try { latestTag() } catch (e: Exception) {
-                Diag.warn("UPD", "✗ tags 接口 " + (e.message ?: ""))
-                null
-            }
-            val urls = ArrayList<String>()
-            if (tag != null) {
-                urls.add("https://cdn.jsdelivr.net/gh/$OWNER/$REPO@$tag/update.json")
-                Diag.log("UPD", "最新 tag = $tag")
-            }
-            urls.addAll(MANIFEST_URLS)
+            val urls = ArrayList<String>(MANIFEST_URLS)
 
             for (url in urls) {
                 try {
@@ -125,33 +110,6 @@ object Updater {
      * 就是最新发的那个。不按版本号大小挑，是因为版本号可能重新开始编号
      * （比如内部迭代到 2.34 之后，对外首发叫 1.0.0）。
      */
-    private fun latestTag(): String? {
-        // 首选仓库里的小文件 latest.txt（raw 不走 CDN、没有限流），内容就一行 v1.0.0。
-        // 拿不到再退回 GitHub tags 接口。
-        try {
-            val txt = fetch(LATEST_TAG_URL).trim()
-            if (txt.matches(Regex("v\\d+(\\.\\d+){1,3}"))) return txt
-        } catch (_: Exception) {
-        }
-        val json = fetch(TAGS_URL)
-        val arr = org.json.JSONArray(json)
-        for (i in 0 until arr.length()) {
-            val name = arr.getJSONObject(i).optString("name")
-            if (!name.startsWith("v")) continue
-            if (versionCodeOf(name.substring(1)) >= 0) return name
-        }
-        return null
-    }
-
-    /** "1.2.3" -> 10203；"2.28" -> 22800；"2.9" -> 20900，只用来判断「像不像版本号」 */
-    private fun versionCodeOf(v: String): Int {
-        val p = v.trim().split(".")
-        val major = p.getOrNull(0)?.toIntOrNull() ?: return -1
-        val minor = p.getOrNull(1)?.toIntOrNull() ?: 0
-        val patch = p.getOrNull(2)?.toIntOrNull() ?: 0
-        return major * 10000 + minor * 100 + patch
-    }
-
     private fun hostOf(url: String): String = try {
         URL(url).host ?: url
     } catch (e: Exception) {

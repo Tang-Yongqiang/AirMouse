@@ -114,6 +114,12 @@ $manifest = [ordered]@{
     publishedAt = (Get-Date -Format 'yyyy-MM-dd')
 }
 $json = $manifest | ConvertTo-Json -Depth 5
+# 只保留最近 3 个版本目录：jsDelivr 对超过 50 MB 的仓库直接拒绝服务
+$keep = @((Get-ChildItem (Join-Path $root 'releases') -Directory | Sort-Object Name -Descending | Select-Object -First 3) | ForEach-Object { $_.Name })
+Get-ChildItem (Join-Path $root 'releases') -Directory | Where-Object { $keep -notcontains $_.Name } | ForEach-Object {
+    Write-Host "[3b] 清理旧版本目录 $($_.Name)" -ForegroundColor DarkGray
+    & git -C $root rm -r --quiet "releases/$($_.Name)"
+}
 [IO.File]::WriteAllText((Join-Path $root 'update.json'), $json + "`n", (New-Object Text.UTF8Encoding($false)))
 Write-Host "[4/7] update.json 已更新" -ForegroundColor Cyan
 
