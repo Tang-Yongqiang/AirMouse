@@ -24,6 +24,15 @@ $Gradle = 'C:\Users\Tangyq\.gradle\wrapper\dists\gradle-8.14.3-all\cbf6zifq8xavo
 $Csc    = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $Aapt2  = 'D:\Software\Android_SDK\build-tools\35.0.0\aapt2.exe'
 
+function Norm3([string]$v) {
+    # 把 1.1.0.0 / 1.1 统一成 1.1.0（三段）
+    $n = @($v.Split('.') | Where-Object { $_ -ne '' })
+    while ($n.Count -gt 3) { $n = $n[0..($n.Count - 2)] }
+    while ($n.Count -gt 2 -and $n[$n.Count - 1] -eq '0') { $n = $n[0..($n.Count - 2)] }
+    while ($n.Count -lt 3) { $n += '0' }
+    return ($n -join '.')
+}
+
 function Pad4([string]$v) {
     if (-not $v) { return "" }
     $n = $v.Split('.')
@@ -50,6 +59,7 @@ if ([string]::IsNullOrWhiteSpace($ServerVersion)) {
     if (-not $mm.Success) { throw "读不到 pc\AssemblyInfo.cs 里的 AssemblyFileVersion" }
     $ServerVersion = $mm.Groups[1].Value
 }
+$ServerVersion = Norm3 $ServerVersion
 $asmVer = Pad4 $ServerVersion
 $a = [regex]::Replace($a, 'AssemblyVersion\("[^"]*"\)', "AssemblyVersion(`"$asmVer`")")
 $a = [regex]::Replace($a, 'AssemblyFileVersion\("[^"]*"\)', "AssemblyFileVersion(`"$asmVer`")")

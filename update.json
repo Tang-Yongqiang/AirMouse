@@ -1,14 +1,14 @@
 {
     "proto":  1,
     "apk":  {
-                "versionCode":  60,
-                "versionName":  "1.1.1",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.1/AirMouse-1.1.1.apk"
+                "versionCode":  61,
+                "versionName":  "1.1.2",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.2/AirMouse-1.1.2.apk"
             },
     "server":  {
-                   "version":  "1.1.0.0",
-                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.0.0/AirMouseServer-v1.1.0.0.zip"
+                   "version":  "1.1.0",
+                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.0/AirMouseServer-v1.1.0.zip"
                },
-    "notes":  "· 发布目录按手机端/电脑端分开（app-v / server-v），两边版本号互不影响\n· 新增一个发给别人的整包 zip",
+    "notes":  "· 发布目录按手机端/电脑端分开（app-v / server-v），两边版本号互不影响\n· 新增一个发给别人的整包 zip（APK + 安装程序 + 使用说明）",
     "publishedAt":  "2026-11-07"
 }
