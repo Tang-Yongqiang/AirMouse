@@ -34,8 +34,13 @@ $txt = [regex]::Replace($txt, 'versionName\s*=\s*"[^"]*"', "versionName = `"$Ver
 
 $asm = Join-Path $root 'pc\AssemblyInfo.cs'
 $a = [IO.File]::ReadAllText($asm, [Text.Encoding]::UTF8)
-$a = [regex]::Replace($a, 'AssemblyVersion\("[^"]*"\)', "AssemblyVersion(`"$Version.0.0`")")
-$a = [regex]::Replace($a, 'AssemblyFileVersion\("[^"]*"\)', "AssemblyFileVersion(`"$Version.0.0`")")
+# 版本号统一成四段给 AssemblyVersion：1.0.0 -> 1.0.0.0；2.34 -> 2.34.0.0
+$segs = $Version.Split('.')
+if ($segs.Count -lt 2 -or $segs.Count -gt 4) { throw "版本号要写成 1.0.0 这种 2~4 段" }
+$asmVer = $Version
+while (($asmVer.Split('.')).Count -lt 4) { $asmVer = $asmVer + ".0" }
+$a = [regex]::Replace($a, 'AssemblyVersion\("[^"]*"\)', "AssemblyVersion(`"$asmVer`")")
+$a = [regex]::Replace($a, 'AssemblyFileVersion\("[^"]*"\)', "AssemblyFileVersion(`"$asmVer`")")
 [IO.File]::WriteAllText($asm, $a, (New-Object Text.UTF8Encoding($false)))
 
 Write-Host "[1/7] 版本号 → $Version (versionCode $code)" -ForegroundColor Cyan

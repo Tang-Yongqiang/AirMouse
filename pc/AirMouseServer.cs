@@ -1,4 +1,4 @@
-// AirMouse 接收端（Windows 单文件 exe）
+﻿// AirMouse 接收端（Windows 单文件 exe）
 // 编译：csc /target:winexe /codepage:65001 /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll AirMouseServer.cs
 //
 // 与 pc/airmouse_server.py 协议完全一致：一行一个 JSON
@@ -479,28 +479,27 @@ namespace AirMouse
             var ser = new JavaScriptSerializer();
             var arr = ser.Deserialize<List<Dictionary<string, object>>>(json);
             if (arr == null) return null;
-            string best = null;
-            int bestCode = -1;
+            // GitHub 的 tags 接口按时间倒序返回，所以「第一个 v 开头的」就是最新发的那个。
+            // 不按版本号大小挑，是为了将来还能把版本号改成 1.0.0 这种「重新开始」的编号。
             foreach (var item in arr)
             {
                 object n;
                 if (!item.TryGetValue("name", out n) || n == null) continue;
                 string name = n.ToString();
-                if (!name.StartsWith("v")) continue;
-                int code = VersionCodeOf(name.Substring(1));
-                if (code > bestCode) { bestCode = code; best = name; }
+                if (name.StartsWith("v") && VersionCodeOf(name.Substring(1)) >= 0) return name;
             }
-            return best;
+            return null;
         }
 
-        /// <summary>"2.28" -> 228；"2.9" -> 209</summary>
+        /// <summary>"1.2.3" -> 10203；"2.28" -> 22800；"2.9" -> 20900</summary>
         private static int VersionCodeOf(string v)
         {
             var parts = v.Split('.');
-            int major, minor = 0;
+            int major, minor = 0, patch = 0;
             if (parts.Length == 0 || !int.TryParse(parts[0], out major)) return -1;
             if (parts.Length > 1) int.TryParse(parts[1], out minor);
-            return major * 100 + minor;
+            if (parts.Length > 2) int.TryParse(parts[2], out patch);
+            return major * 10000 + minor * 100 + patch;
         }
 
         private void StartUpdateCheck()
@@ -611,19 +610,22 @@ namespace AirMouse
         private static string CurrentVersion()
         {
             var v = typeof(MainForm).Assembly.GetName().Version;
-            return v.Major + "." + v.Minor;
+            return v.Major + "." + v.Minor + "." + v.Build;
         }
 
-        /// <summary>比较 "2.25" 这种两段式版本号，比当前大就返回 true</summary>
+        /// <summary>比较 "1.0.0" 这种三段式版本号（两段也能用），比当前大就返回 true</summary>
         private static bool IsNewer(string remote)
         {
+            // 支持 1.0.0 / 1.0 / 1 三种写法，按 主.次.修订 逐段比较
             var v = typeof(MainForm).Assembly.GetName().Version;
             var parts = remote.Split('.');
-            int major, minor;
-            if (!int.TryParse(parts[0], out major)) return false;
-            if (parts.Length < 2 || !int.TryParse(parts[1], out minor)) minor = 0;
+            int major = 0, minor = 0, patch = 0;
+            if (parts.Length == 0 || !int.TryParse(parts[0], out major)) return false;
+            if (parts.Length > 1) int.TryParse(parts[1], out minor);
+            if (parts.Length > 2) int.TryParse(parts[2], out patch);
             if (major != v.Major) return major > v.Major;
-            return minor > v.Minor;
+            if (minor != v.Minor) return minor > v.Minor;
+            return patch > v.Build;
         }
         private readonly TextBox _log = new TextBox();
         private readonly CheckBox _autostart = new CheckBox();

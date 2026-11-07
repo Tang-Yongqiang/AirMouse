@@ -1,4 +1,4 @@
-package com.airmouse.gyro
+﻿package com.airmouse.gyro
 
 import android.content.Context
 import android.content.Intent
@@ -117,30 +117,31 @@ object Updater {
         }.apply { isDaemon = true }.start()
     }
 
-    /** 取仓库里语义化版本最大的那个 tag（形如 v2.28），失败返回 null */
+    /**
+     * 取「最近发布」的 tag（形如 v1.0.0）。
+     *
+     * GitHub 的 tags 接口是按时间倒序返回的，所以第一个 v 开头、并且版本号能解析的，
+     * 就是最新发的那个。不按版本号大小挑，是因为版本号可能重新开始编号
+     * （比如内部迭代到 2.34 之后，对外首发叫 1.0.0）。
+     */
     private fun latestTag(): String? {
         val json = fetch(TAGS_URL)
         val arr = org.json.JSONArray(json)
-        var best: String? = null
-        var bestCode = -1
         for (i in 0 until arr.length()) {
             val name = arr.getJSONObject(i).optString("name")
             if (!name.startsWith("v")) continue
-            val code = versionCodeOf(name.substring(1))
-            if (code > bestCode) {
-                bestCode = code
-                best = name
-            }
+            if (versionCodeOf(name.substring(1)) >= 0) return name
         }
-        return best
+        return null
     }
 
-    /** "2.28" -> 228；"2.9" -> 209，用来比较大小 */
+    /** "1.2.3" -> 10203；"2.28" -> 22800；"2.9" -> 20900，只用来判断「像不像版本号」 */
     private fun versionCodeOf(v: String): Int {
         val p = v.trim().split(".")
         val major = p.getOrNull(0)?.toIntOrNull() ?: return -1
         val minor = p.getOrNull(1)?.toIntOrNull() ?: 0
-        return major * 100 + minor
+        val patch = p.getOrNull(2)?.toIntOrNull() ?: 0
+        return major * 10000 + minor * 100 + patch
     }
 
     private fun hostOf(url: String): String = try {
