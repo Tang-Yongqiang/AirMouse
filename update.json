@@ -1,8 +1,8 @@
 {
-    "versionCode":  40,
-    "versionName":  "2.29",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.29/AirMouse-2.29.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.29/AirMouseServer-v2.29.zip",
-    "notes":  "· 检查更新改走 GitHub tag 列表（不再受 CDN 缓存影响，发版后立刻可见）\n· APK 仍是 4 MB（R8 压缩）",
+    "versionCode":  41,
+    "versionName":  "2.30",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.30/AirMouse-2.30.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.30/AirMouseServer-v2.30.zip",
+    "notes":  "最小化/切到后台后仍能控制鼠标（注入改由有签名的 powershell 宿主执行）；新增 AirMouseHook.dll，必须与 exe 放在同一目录。",
     "publishedAt":  "2026-11-07"
 }

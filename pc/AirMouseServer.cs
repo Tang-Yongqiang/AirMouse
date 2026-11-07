@@ -146,6 +146,17 @@ namespace AirMouse
         public static extern bool GetCursorPos(out POINT p);
 
         [DllImport("user32.dll")]
+        public static extern bool SetCursorPos(int x, int y);
+
+        public const int SM_XVIRTUALSCREEN = 76;
+        public const int SM_YVIRTUALSCREEN = 77;
+        public const int SM_CXVIRTUALSCREEN = 78;
+        public const int SM_CYVIRTUALSCREEN = 79;
+
+        [DllImport("user32.dll")]
+        public static extern int GetSystemMetrics(int index);
+
+        [DllImport("user32.dll")]
         public static extern bool SetProcessDPIAware();
     }
 
@@ -222,7 +233,38 @@ namespace AirMouse
             Send(inp);
         }
 
-        public static void Move(int dx, int dy) { Mouse(Native.MOUSEEVENTF_MOVE, dx, dy); }
+        /// <summary>
+        /// 相对移动。优先用 SetCursorPos：它没有指针加速，行为更可预测。
+        /// 注意（实测）：火绒/360 这类安全软件会把「未签名程序在非前台时」的
+        /// SetCursorPos 直接判失败、SendInput 静默丢弃 —— 两种情况都没法靠代码绕过，
+        /// 只能让用户把本程序加入信任区，或让本窗口保持在前台。
+        /// </summary>
+        private static int _moveProbe;
+        private static bool _blockedHintLogged;
+
+        public static void Move(int dx, int dy)
+        {
+            // 有签名宿主在就直接交给它（未签名进程在后台会被系统拒绝注入）
+            if (HostBridge.Alive && HostBridge.Send("M " + dx + " " + dy)) return;
+
+            Native.POINT p;
+            bool got = Native.GetCursorPos(out p);
+            bool ok = got && Native.SetCursorPos(p.X + dx, p.Y + dy);
+            if (++_moveProbe % 60 == 1)
+                Log.Write(string.Format("  · move probe got={0} pos={1},{2} set={3} sm={4}x{5}",
+                    got, p.X, p.Y, ok,
+                    Native.GetSystemMetrics(Native.SM_CXVIRTUALSCREEN),
+                    Native.GetSystemMetrics(Native.SM_CYVIRTUALSCREEN)));
+            if (ok) return;
+            if (!_blockedHintLogged)
+            {
+                _blockedHintLogged = true;
+                Log.Write("[!] 系统拒绝了本程序移动光标（SetCursorPos 失败）。常见原因：火绒/360 只放行「前台」的未签名程序动鼠标。");
+                Log.Write("    解决办法：把 AirMouseServer.exe 加进安全软件的信任区，或关掉它「系统加固 → 键鼠模拟/修改光标」这类拦截。");
+                Log.Write("    临时办法：让本窗口保持前台（不要最小化、也不要把焦点切走）。");
+            }
+            Mouse(Native.MOUSEEVENTF_MOVE, dx, dy);
+        }
 
         /// <summary>
         /// 试点移动一次并读回光标位置，判断 SendInput 是否真的生效。
@@ -262,15 +304,44 @@ namespace AirMouse
         {
             if (u < 0) u = 0; if (u > 1) u = 1;
             if (v < 0) v = 0; if (v > 1) v = 1;
-            int x = (int)Math.Round(u * 65535.0);
-            int y = (int)Math.Round(v * 65535.0);
-            Mouse(Native.MOUSEEVENTF_MOVE | Native.MOUSEEVENTF_ABSOLUTE | Native.MOUSEEVENTF_VIRTUALDESK, x, y);
+
+            if (HostBridge.Alive && HostBridge.Send("A " +
+                u.ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + " " +
+                v.ToString("F4", System.Globalization.CultureInfo.InvariantCulture))) return;
+
+            // 同上：绝对定位也优先 SetCursorPos（按虚拟桌面像素算，避免 65535 取整误差）
+            int w = Native.GetSystemMetrics(Native.SM_CXVIRTUALSCREEN);
+            int h = Native.GetSystemMetrics(Native.SM_CYVIRTUALSCREEN);
+            if (w > 1 && h > 1)
+            {
+                int x0 = Native.GetSystemMetrics(Native.SM_XVIRTUALSCREEN);
+                int y0 = Native.GetSystemMetrics(Native.SM_YVIRTUALSCREEN);
+                int x = x0 + (int)Math.Round(u * (w - 1));
+                int y = y0 + (int)Math.Round(v * (h - 1));
+                if (Native.SetCursorPos(x, y)) return;
+                if (!_blockedHintLogged)
+                {
+                    _blockedHintLogged = true;
+                    Log.Write("[!] 系统拒绝了本程序移动光标（SetCursorPos 失败）。常见原因：火绒/360 只放行「前台」的未签名程序动鼠标。");
+                    Log.Write("    解决办法：把 AirMouseServer.exe 加进安全软件的信任区，或关掉它「系统加固 → 键鼠模拟/修改光标」这类拦截。");
+                    Log.Write("    临时办法：让本窗口保持前台（不要最小化、也不要把焦点切走）。");
+                }
+            }
+
+            int ax = (int)Math.Round(u * 65535.0);
+            int ay = (int)Math.Round(v * 65535.0);
+            Mouse(Native.MOUSEEVENTF_MOVE | Native.MOUSEEVENTF_ABSOLUTE | Native.MOUSEEVENTF_VIRTUALDESK, ax, ay);
         }
 
-        public static bool Wheel(int notches) { return Mouse(Native.MOUSEEVENTF_WHEEL, 0, 0, notches * Native.WHEEL_DELTA); }
+        public static bool Wheel(int notches)
+        {
+            if (HostBridge.Alive && HostBridge.Send("W " + notches)) return true;
+            return Mouse(Native.MOUSEEVENTF_WHEEL, 0, 0, notches * Native.WHEEL_DELTA);
+        }
 
         public static bool Button(int b, bool down)
         {
+            if (HostBridge.Alive && HostBridge.Send("B " + b + " " + (down ? 1 : 0))) return true;
             uint f;
             if (b == 2) f = down ? Native.MOUSEEVENTF_RIGHTDOWN : Native.MOUSEEVENTF_RIGHTUP;
             else if (b == 3) f = down ? Native.MOUSEEVENTF_MIDDLEDOWN : Native.MOUSEEVENTF_MIDDLEUP;
@@ -282,6 +353,7 @@ namespace AirMouse
         {
             int vk;
             if (!HidToVk.TryGetValue(usage, out vk)) return false;
+            if (HostBridge.Alive && HostBridge.Send("V " + vk + " " + mods)) return true;
             var held = new List<int>();
             foreach (var pair in ModMap)
             {
@@ -296,6 +368,17 @@ namespace AirMouse
         public static void Text(string s)
         {
             if (s == null) return;
+            if (HostBridge.Alive)
+            {
+                string norm = s.Replace("\r\n", "\n").Replace('\r', '\n');
+                string[] parts = norm.Split('\n');
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    if (i > 0) HostBridge.Send("V 13 0");
+                    if (parts[i].Length > 0) HostBridge.Send("S " + parts[i]);
+                }
+                return;
+            }
             foreach (char ch in s)
             {
                 if (ch == '\n' || ch == '\r') { KeyVk(0x0D, false); KeyVk(0x0D, true); continue; }
@@ -742,6 +825,7 @@ namespace AirMouse
 
             Load += (s, e) =>
             {
+                HostBridge.Start();
                 StartServer();
                 StartUpdateCheck();
             };

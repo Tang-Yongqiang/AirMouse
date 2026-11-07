@@ -48,22 +48,27 @@ $apkOut = Join-Path $root "dist\AirMouse-$Version.apk"
 Copy-Item $apkSrc $apkOut -Force
 
 $exeOut = Join-Path $root 'dist\AirMouseServer.exe'
+$hookOut = Join-Path $root 'dist\AirMouseHook.dll'
 Get-Process AirMouseServer -ErrorAction SilentlyContinue | Stop-Process -Force
+# 注入宿主 DLL（由 powershell.exe 加载执行，见 pc\InjectorChild.cs）
+& $Csc /nologo /target:library /optimize+ /out:"$hookOut" "$root\pc\InjectorChild.cs"
+if ($LASTEXITCODE -ne 0) { throw "csc 编译 AirMouseHook.dll 失败" }
 & $Csc /nologo /target:winexe /codepage:65001 /optimize+ /r:System.Web.Extensions.dll `
     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.CSharp.dll `
     /win32icon:"$root\pc\airmouse.ico" /out:"$exeOut" `
-    "$root\pc\AirMouseServer.cs" "$root\pc\AssemblyInfo.cs"
+    "$root\pc\AirMouseServer.cs" "$root\pc\InjectorHost.cs" "$root\pc\AssemblyInfo.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc 编译失败" }
-Write-Host "[2/7] 编译完成：APK $([math]::Round((Get-Item $apkOut).Length/1MB,2)) MB / EXE $((Get-Item $exeOut).Length) B" -ForegroundColor Cyan
+Write-Host "[2/7] 编译完成：APK $([math]::Round((Get-Item $apkOut).Length/1MB,2)) MB / EXE $((Get-Item $exeOut).Length) B / DLL $((Get-Item $hookOut).Length) B" -ForegroundColor Cyan
 
 # 3) 放进 releases/vX.Y，并给 exe 打一个 zip（jsDelivr 不允许 .exe 直链）
 $rel = Join-Path $root "releases\v$Version"
 New-Item -ItemType Directory -Path $rel -Force | Out-Null
 Copy-Item $apkOut (Join-Path $rel "AirMouse-$Version.apk") -Force
 Copy-Item $exeOut (Join-Path $rel 'AirMouseServer.exe') -Force
+Copy-Item $hookOut (Join-Path $rel 'AirMouseHook.dll') -Force
 $exeZip = Join-Path $rel "AirMouseServer-v$Version.zip"
 Remove-Item $exeZip -Force -ErrorAction SilentlyContinue
-Compress-Archive -Path (Join-Path $rel 'AirMouseServer.exe') -DestinationPath $exeZip -CompressionLevel Optimal
+Compress-Archive -Path (Join-Path $rel 'AirMouseServer.exe'), (Join-Path $rel 'AirMouseHook.dll') -DestinationPath $exeZip -CompressionLevel Optimal
 Write-Host "[3/7] 已放入 releases\v$Version" -ForegroundColor Cyan
 
 # 4) update.json
