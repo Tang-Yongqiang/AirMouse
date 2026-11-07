@@ -500,9 +500,10 @@ namespace AirMouse
                     try
                     {
                         var cur = typeof(MainForm).Assembly.GetName().Version;
-                        for (int step = 1; step <= 3; step++)
+                        foreach (int step in new int[] { 1, 2, 3, 0, -1, -2 })
                         {
                             string gt = "v" + cur.Major + "." + cur.Minor + "." + (cur.Build + step);
+                            if (cur.Build + step < 0) continue;
                             string gu = "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@" + gt + "/update.json";
                             try
                             {

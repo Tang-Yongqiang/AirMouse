@@ -97,8 +97,13 @@ object Updater {
                 val minor = lp[1].toIntOrNull()
                 val patch = lp.getOrNull(2)?.toIntOrNull() ?: 0
                 if (major != null && minor != null) {
-                    for (step in 1..3) guessed.add("v$major.$minor.${patch + step}")
+                    // 往后猜 3 个（有新版本时最常用），再补上「当前版本本身」和往前 2 个：
+                    // 这样「已经是最新」时也能拿到自己的清单，不会被 CDN 缓存里的旧版本骗到。
+                    for (d in listOf(1, 2, 3, 0, -1, -2)) {
+                        if (patch + d >= 0) guessed.add("v$major.$minor.${patch + d}")
+                    }
                 }
+
             }
             var bestGuess: Info? = null
             for (t in guessed) {
