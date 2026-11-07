@@ -1,8 +1,8 @@
 {
-    "versionCode":  41,
-    "versionName":  "2.30",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.30/AirMouse-2.30.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.30/AirMouseServer-v2.30.zip",
-    "notes":  "最小化/切到后台后仍能控制鼠标（注入改由有签名的 powershell 宿主执行）；新增 AirMouseHook.dll，必须与 exe 放在同一目录。",
+    "versionCode":  42,
+    "versionName":  "2.31",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.31/AirMouse-2.31.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.31/AirMouseServer-v2.31.zip",
+    "notes":  " 接收端改为必须管理员权限运行（未提权时最小化/切后台会无法控制鼠标）；开机自启改用计划任务（最高权限，登录不弹 UAC）；启动时自动添加防火墙放行规则；功能与 2.30 相同",
     "publishedAt":  "2026-11-07"
 }

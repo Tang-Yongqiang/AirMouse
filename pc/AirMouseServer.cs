@@ -887,9 +887,11 @@ namespace AirMouse
             Log.Write("  手机端：连接方式选 WiFi → 填上面的 IP（要和手机同一网段）→ 连接");
             if (HasFirewallRule())
                 Log.Write("  [i] 防火墙：本程序的放行规则在，手机应该能连上");
+            else if (TryAddFirewallRule())
+                Log.Write("  [i] 防火墙：已自动放行本程序（管理员权限下无需手动操作）");
             else
-                Log.Write("  [!] 防火墙：没找到本程序的放行规则。手机连不上的话，第一次运行时 Windows 会弹「允许访问」，点允许即可；" +
-                          "没弹窗就手动放行（控制面板 → Windows Defender 防火墙 → 允许应用通过防火墙 → 勾上 AirMouseServer）");
+                Log.Write("  [!] 防火墙：没找到本程序的放行规则，自动放行也失败。手机连不上的话，点右下角「放行防火墙」按钮，"
+                          + "或手动到 控制面板 → Windows Defender 防火墙 → 允许应用通过防火墙 → 勾上 AirMouseServer");
 
             // 注意：这里不要加「模拟输入自检」。刚启动时第一次 SendInput 常被吞，
             // 自检会误报「被安全软件拦了」，但几秒后真正的指令其实都能生效（踩过）。
@@ -918,6 +920,32 @@ namespace AirMouse
                     string output = p.StandardOutput.ReadToEnd();
                     p.WaitForExit(1500);
                     return output != null && output.IndexOf("AirMouseServer", StringComparison.OrdinalIgnoreCase) >= 0;
+                }
+            }
+            catch { return false; }
+        }
+
+        /// <summary>管理员权限下静默加一条入站放行规则（免去用户手动点防火墙）。</summary>
+        private static bool TryAddFirewallRule()
+        {
+            try
+            {
+                string exe = Application.ExecutablePath;
+                var psi = new System.Diagnostics.ProcessStartInfo("netsh",
+                    "advfirewall firewall add rule name=\"AirMouseServer\" dir=in action=allow program=\"" + exe +
+                    "\" enable=yes profile=any")
+                {
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using (var p = System.Diagnostics.Process.Start(psi))
+                {
+                    p.StandardOutput.ReadToEnd();
+                    p.StandardError.ReadToEnd();
+                    p.WaitForExit(4000);
+                    return p.ExitCode == 0;
                 }
             }
             catch { return false; }
@@ -1313,7 +1341,7 @@ namespace AirMouse
                 psi.RedirectStandardOutput = true;
                 if (on)
                 {
-                    psi.Arguments = "/create /tn \"AirMouseServer\" /tr \"" + Application.ExecutablePath + "\" /sc onlogon /rl limited /f";
+                    psi.Arguments = "/create /tn \"AirMouseServer\" /tr \"" + Application.ExecutablePath + "\" /sc onlogon /rl highest /f";
                 }
                 else
                 {
@@ -1333,21 +1361,34 @@ namespace AirMouse
             catch (Exception ex) { error = ex.Message; return false; }
         }
 
-        /// <summary>开/关开机自启：注册表 → 启动文件夹快捷方式 → 计划任务，逐级兜底。</summary>
+        /// <summary>开/关开机自启：计划任务(最高权限) → 注册表 → 启动文件夹，逐级兜底。
+        /// 本程序要求管理员权限，注册表 Run 项每次登录都会弹 UAC，所以优先用计划任务（/rl highest 不弹 UAC）。</summary>
         internal static bool SetAutostart(bool on)
         {
+            string schErr;
+            if (SetLogonTask(on, out schErr))
+            {
+                // 计划任务能建，顺手清掉另外两处可能残留，避免重复启动
+                string ignored;
+                SetStartupLnk(false, out ignored);
+                if (on) SetRegistryAutostart(false, out ignored);
+                Log.Write(on ? "[i] 已设置开机自启（计划任务 AirMouseServer，最高权限）" : "[i] 已取消开机自启");
+                return true;
+            }
+
+            Log.Write("[i] 计划任务写不了（" + schErr + "），改用注册表");
+
             string regErr;
             bool regOk = SetRegistryAutostart(on, out regErr);
             if (regOk)
             {
-                // 注册表这条路能走，顺手清掉可能残留的快捷方式，避免两处同时自启
                 string ignored;
                 SetStartupLnk(false, out ignored);
                 Log.Write(on ? "[i] 已设置开机自启（注册表）" : "[i] 已取消开机自启");
                 return true;
             }
 
-            Log.Write("[i] 注册表写不了（" + regErr + "），改用启动文件夹快捷方式");
+            Log.Write("[i] 注册表也写不了（" + regErr + "），改用启动文件夹快捷方式");
 
             string lnkErr;
             bool lnkOk = SetStartupLnk(on, out lnkErr);
@@ -1359,16 +1400,8 @@ namespace AirMouse
                 return true;
             }
 
-            Log.Write("[i] 启动文件夹也写不了（" + lnkErr + "），改用计划任务");
-            string schErr;
-            if (SetLogonTask(on, out schErr))
-            {
-                Log.Write(on ? "[i] 已设置开机自启（计划任务 AirMouseServer）" : "[i] 已取消开机自启（删掉了计划任务）");
-                return true;
-            }
-
-            Log.Write("[!] 设置自启失败：注册表 / 启动文件夹 / 计划任务都写不了。" +
-                      "注册表=" + regErr + "；快捷方式=" + lnkErr + "；计划任务=" + schErr);
+            Log.Write("[!] 设置自启失败：计划任务 / 注册表 / 启动文件夹都写不了。" +
+                      "计划任务=" + schErr + "；注册表=" + regErr + "；快捷方式=" + lnkErr);
             return false;
         }
     }

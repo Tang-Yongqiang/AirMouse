@@ -55,7 +55,7 @@ Get-Process AirMouseServer -ErrorAction SilentlyContinue | Stop-Process -Force
 if ($LASTEXITCODE -ne 0) { throw "csc 编译 AirMouseHook.dll 失败" }
 & $Csc /nologo /target:winexe /codepage:65001 /optimize+ /r:System.Web.Extensions.dll `
     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.CSharp.dll `
-    /win32icon:"$root\pc\airmouse.ico" /out:"$exeOut" `
+    /win32icon:"$root\pc\airmouse.ico" /win32manifest:"$root\pc\app.manifest" /out:"$exeOut" `
     "$root\pc\AirMouseServer.cs" "$root\pc\InjectorHost.cs" "$root\pc\AssemblyInfo.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc 编译失败" }
 Write-Host "[2/7] 编译完成：APK $([math]::Round((Get-Item $apkOut).Length/1MB,2)) MB / EXE $((Get-Item $exeOut).Length) B / DLL $((Get-Item $hookOut).Length) B" -ForegroundColor Cyan
