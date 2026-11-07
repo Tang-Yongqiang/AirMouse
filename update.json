@@ -1,8 +1,8 @@
 {
-  "versionCode": 36,
-  "versionName": "2.25",
-  "apk": "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.25/AirMouse-2.25.apk",
-  "exe": "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.25/AirMouseServer-v2.25.zip",
-  "notes": "· 新增「检查更新」：设置里手动检查，启动时也会静默检查一次\n· 连不上时最多自动重试 10 次，之后点顶部状态栏才重连\n· 电脑端不再依赖托盘图标，× 改为最小化到任务栏\n· 电脑端运行时检查新版本，有更新在窗口顶部显示下载链接",
-  "publishedAt": "2026-11-07"
+    "versionCode":  37,
+    "versionName":  "2.26",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.26/AirMouse-2.26.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.26/AirMouseServer-v2.26.zip",
+    "notes":  "· 测试版：验证「检查更新 → 下载 → 安装」全流程\n· 本版无功能改动",
+    "publishedAt":  "2026-11-07"
 }

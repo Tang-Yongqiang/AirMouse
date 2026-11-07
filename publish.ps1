@@ -1,4 +1,4 @@
-# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
+﻿# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
 #
 # 用法（在仓库根目录）：
 #   .\publish.ps1 -Version 2.26 -Notes "新增：…`n修复：…"
