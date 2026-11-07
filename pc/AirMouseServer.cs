@@ -376,7 +376,7 @@ namespace AirMouse
         /// </summary>
         public static readonly string[] ManifestUrls =
         {
-            "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/update.json",
+            "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@latest/update.json",
             "https://raw.githubusercontent.com/Tang-Yongqiang/AirMouse/main/update.json",
             "https://gitee.com/Tang-Yongqiang/AirMouse/raw/main/update.json"
         };

@@ -26,7 +26,7 @@ object Updater {
      * 发布前把 CHANGE_ME / <账号> 换成你自己的。
      */
     val MANIFEST_URLS = listOf(
-        "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/update.json",
+        "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@latest/update.json",
         "https://raw.githubusercontent.com/Tang-Yongqiang/AirMouse/main/update.json",
         "https://gitee.com/Tang-Yongqiang/AirMouse/raw/main/update.json"
     )
