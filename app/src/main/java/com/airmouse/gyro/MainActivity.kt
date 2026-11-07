@@ -203,7 +203,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         }
         // 调试用：--ez diag true 直接打开诊断日志抽屉
         if (intent?.getBooleanExtra("updatecheck", false) == true) {
-            main.postDelayed({ Updater.checkNow(this) { _ -> } }, 800)
+            main.postDelayed({ showSettings(); main.postDelayed({ checkUpdateForDebug() }, 700) }, 500)
         }
         // 调试用：--ez apkdl true 直接走一遍「应用内下载 → 安装器」（不发版也能测下载面板）
         if (intent?.getBooleanExtra("apkdl", false) == true) {
@@ -1443,9 +1443,11 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                     tvUpdate.text = "当前 " + versionLabel() + "（已是最新）"
                     toast("已是最新版本 " + info.versionName)
                 } else if (info.versionCode.toLong() < currentVersionCode()) {
-                    // 线上还没有更新：本机这份比发布版新（自己编的测试版）
-                    tvUpdate.text = "当前 " + versionLabel()
-                    toast("线上最新是 " + info.versionName + "，你装的 " + versionLabel() + " 更新")
+                    // 查到的比本机还旧：多半是 CDN 缓存没跟上（或本机是自己编的测试版）。
+                    // 对用户来说这就是「没查到更新」，别把「线上最新是 1.0.7」这种看着像倒退的话抛给他。
+                    tvUpdate.text = "当前 " + versionLabel() + "（已是最新）"
+                    Diag.warn("UPD", "查到的 " + info.versionName + " 比本机旧，按「已是最新」处理")
+                    toast("已是最新版本 " + versionLabel())
                 } else {
                     tvUpdate.text = "当前 " + versionLabel()
                     showSheet(
@@ -1496,6 +1498,19 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         "1.0"
     }
 
+    /** 调试用：走一遍「设置 → 检查更新」的完整逻辑（让 --ez updatecheck 也能弹出真实提示） */
+    private fun checkUpdateForDebug() {
+        Updater.checkNow(this) { r ->
+            val info = r.info
+            if (info == null) {
+                toast("检查失败：" + (r.error ?: "网络不通"))
+            } else if (info.versionCode.toLong() <= currentVersionCode()) {
+                toast("已是最新版本 " + versionLabel())
+            } else {
+                toast("发现新版本 " + info.versionName)
+            }
+        }
+    }
     /** 诊断日志用：版本名 + 版本码 */
     private fun versionLabelFull(): String = try {
         val pi = packageManager.getPackageInfo(packageName, 0)
