@@ -1,0 +1,20 @@
+# 构建产物
+build/
+app/build/
+.gradle/
+.kotlin/
+.idea/
+local.properties
+*.iml
+obj/
+# 运行期日志
+dist/*.log
+*.log
+# 系统垃圾
+Thumbs.db
+.DS_Store
+_*
+# ˽�У�ǩ���뱾�ؽű�
+app/airmouse.keystore
+tools/
+dist/

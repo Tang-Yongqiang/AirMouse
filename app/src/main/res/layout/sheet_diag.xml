@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 诊断日志抽屉：等宽小字滚动区 + 复制 / 保存 / 清空 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_panel"
+    android:orientation="vertical"
+    android:paddingBottom="14dp">
+
+    <View
+        android:layout_width="44dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="6dp"
+        android:background="@drawable/bg_handle" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="24dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="4dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="诊断日志"
+            android:textColor="@color/text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/diagClose"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="关闭"
+            android:padding="8dp"
+            android:src="@drawable/ic_close" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="8dp"
+        android:text="用着出问题时，把这一页复制或保存下来发给作者，就能定位原因。不含鼠标坐标和输入内容。"
+        android:textColor="@color/text_dim"
+        android:textSize="12sp" />
+
+    <ScrollView
+        android:id="@+id/diagScroll"
+        android:layout_width="match_parent"
+        android:layout_height="320dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:background="@drawable/bg_key"
+        android:padding="10dp">
+
+        <TextView
+            android:id="@+id/diagText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textColor="@color/text_dim"
+            android:textIsSelectable="true"
+            android:textSize="11sp" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="20dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/diagCopy"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_key"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="复制"
+            android:textColor="@color/accent"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/diagSave"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_key"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="保存到文件"
+            android:textColor="@color/accent"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/diagClear"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_key"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="清空"
+            android:textColor="@color/text_dim"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

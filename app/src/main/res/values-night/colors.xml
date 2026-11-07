@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 深色（默认就是这套，v2.17 起拆成 values/ 浅色 + values-night/ 深色） -->
+<resources>
+    <color name="bg">#FF0B0F14</color>
+    <color name="surface">#FF141A22</color>
+    <color name="surface_2">#FF1B232D</color>
+    <color name="stroke">#FF243040</color>
+    <color name="accent">#FF22D3EE</color>
+    <color name="accent_soft">#FF10394A</color>
+    <color name="text_primary">#FFE8EFF6</color>
+    <color name="text_dim">#FF7D8B9C</color>
+    <color name="ok">#FF35D07F</color>
+    <color name="warn">#FFFFB020</color>
+    <color name="danger">#FFFF5C5C</color>
+    <color name="icon_bg">#FF0B0F14</color>
+
+    <!-- 语义色：给 drawable / 自定义 View 用，避免代码里写死 ARGB -->
+    <color name="on_accent">#FF04222B</color>
+    <color name="on_primary_container">#FF9FEAF6</color>
+    <color name="switch_off">#FF3E4C5C</color>
+    <color name="key_bg">#FF1B232D</color>
+    <color name="key_stroke">#FF2A3745</color>
+    <color name="key_ripple">#5522D3EE</color>
+    <color name="panel_bg">#FF121A22</color>
+    <color name="panel_stroke">#FF1E2A36</color>
+    <color name="pad_top">#FF151D26</color>
+    <color name="pad_bottom">#FF090D12</color>
+    <color name="pad_stroke">#FF223041</color>
+    <color name="handle">#FF46586C</color>
+    <color name="hint">#FF46586C</color>
+    <color name="section">#FF5A6A7C</color>
+    <color name="dialog_text">#FFC7D3E0</color>
+    <color name="scrim">#99000000</color>
+    <color name="dot">#FF44505C</color>
+    <color name="fade_from">#00141A22</color>
+    <color name="fade_to">#FF141A22</color>
+</resources>

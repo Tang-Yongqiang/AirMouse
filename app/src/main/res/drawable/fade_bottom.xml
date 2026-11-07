@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 列表底部渐隐，避免内容在抽屉边缘被硬切一刀 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="270"
+        android:endColor="@color/fade_to"
+        android:startColor="@color/fade_from" />
+</shape>

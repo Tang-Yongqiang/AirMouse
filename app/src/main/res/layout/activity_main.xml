@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <LinearLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- ============ 顶栏：状态 + 设置 ============ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="18dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="4dp">
+
+            <View
+                android:id="@+id/statusDot"
+                android:layout_width="9dp"
+                android:layout_height="9dp"
+                android:background="@drawable/dot" />
+
+            <LinearLayout
+                android:id="@+id/statusBox"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="11dp"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:orientation="vertical"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp">
+
+                <TextView
+                    android:id="@+id/statusTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="未连接"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/statusSub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="点这里选择电脑"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSettings"
+                style="@style/AirText"
+                android:text="设置" />
+        </LinearLayout>
+
+        <!-- ============ 一行搞定：连接方式 ▾ · 陀螺仪 ▾ · 总开关 ============ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnModeMenu"
+                style="@style/AirChip"
+                android:text="蓝牙 ▾" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnGyroMenu"
+                style="@style/AirChip"
+                android:layout_marginStart="6dp"
+                android:text="陀螺仪 关 ▾" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchEnable"
+        android:saveEnabled="false"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:contentDescription="总开关" />
+        </LinearLayout>
+
+        <!-- ============ 触摸板（顶部中间是滚轮） ============ -->
+        <FrameLayout
+            android:id="@+id/touchpadFrame"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginStart="14dp"
+            android:layout_marginEnd="14dp"
+            android:layout_marginBottom="8dp"
+            android:layout_weight="1">
+
+            <com.airmouse.gyro.TouchpadView
+                android:id="@+id/touchpad"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_touchpad" />
+
+            <!-- 滚轮：像真实鼠标一样摆在触摸板中间偏上 -->
+            <com.airmouse.gyro.ScrollStrip
+                android:id="@+id/scrollStrip"
+                android:layout_width="48dp"
+                android:layout_height="112dp"
+                android:layout_gravity="center_horizontal|top"
+                android:layout_marginTop="14dp" />
+
+            <!-- 校准：只在陀螺仪开着时出现。放在右下角（拇指自然落点），右上角单手够不到 -->
+            <TextView
+                android:id="@+id/btnCalib"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="10dp"
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_key"
+                android:gravity="center"
+                android:minWidth="48dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="校准"
+                android:textColor="@color/accent"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/hint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal|bottom"
+                android:layout_marginBottom="26dp"
+                android:gravity="center"
+                android:lineSpacingExtra="7dp"
+                android:text="拖动移动光标 · 轻点左键\n长按拖动 · 双指滚动\n上方滚轮条：一格一格细滚"
+                android:textColor="@color/hint"
+                android:textSize="12sp" />
+        </FrameLayout>
+
+        <!-- ============ 鼠标按键 + 键盘（一行） ============ -->
+        <LinearLayout
+            android:id="@+id/rowButtons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="6dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLeft"
+                style="@style/AirAction"
+                android:layout_weight="1"
+                android:text="左键" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMiddle"
+                style="@style/AirAction"
+                android:layout_marginStart="8dp"
+                android:layout_weight="0.40"
+                android:textSize="13sp"
+                android:text="中键" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRight"
+                style="@style/AirAction"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="右键" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnKeyboard"
+                style="@style/AirAction"
+                android:layout_marginStart="8dp"
+                android:layout_weight="0.75"
+                android:text="键盘" />
+        </LinearLayout>
+
+        <!-- ============ 灵敏度 ============ -->
+        <LinearLayout
+            android:id="@+id/rowSens"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="4dp">
+
+            <TextView
+                android:id="@+id/tvSensLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:gravity="center_vertical"
+                android:paddingEnd="2dp"
+                android:text="灵敏度"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="慢"
+                android:textColor="@color/section"
+                android:textSize="10sp" />
+
+            <SeekBar
+                android:id="@+id/seekSens"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:max="200"
+                android:progress="100" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="2dp"
+                android:text="快"
+                android:textColor="@color/section"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/tvSens"
+                android:layout_width="42dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:gravity="end"
+                android:text="1.00x"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- 键盘面板：浮在整页之上，不挤压触摸板和按键（点空白处收起） -->
+    <View
+        android:id="@+id/kbScrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/scrim"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone" />
+
+    <com.airmouse.gyro.KeyboardPanelView
+        android:id="@+id/keyboard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:visibility="gone" />
+
+</FrameLayout>

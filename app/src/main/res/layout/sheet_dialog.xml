@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通用底部抽屉弹窗：标题 + 可选正文 + 可选自定义内容 + 按钮行（2.9 起统一所有提示/表单） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_panel"
+    android:orientation="vertical"
+    android:paddingBottom="18dp">
+
+    <!-- 拖柄：圆角矩形条 -->
+    <View
+        android:layout_width="44dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="6dp"
+        android:background="@drawable/bg_handle" />
+
+    <TextView
+        android:id="@+id/dlgTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp"
+        android:textColor="@color/text_primary"
+        android:textSize="19sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/dlgMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:lineSpacingExtra="3dp"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="10dp"
+        android:textColor="@color/dialog_text"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <ScrollView
+        android:id="@+id/dlgScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="6dp"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:id="@+id/dlgContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end|center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="6dp">
+
+        <Button
+            android:id="@+id/dlgExtra"
+            style="@style/AirText"
+            android:textColor="@color/text_dim"
+            android:visibility="gone" />
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <Button
+            android:id="@+id/dlgCancel"
+            style="@style/AirText"
+            android:text="取消" />
+
+        <Button
+            android:id="@+id/dlgOk"
+            style="@style/AirText"
+            android:text="确定"
+            android:textColor="@color/accent" />
+    </LinearLayout>
+</LinearLayout>

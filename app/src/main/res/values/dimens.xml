@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 键盘每一行键帽的高度（横屏时空间紧张，用 values-land 里的小一号） -->
+    <dimen name="key_row_h">46dp</dimen>
+</resources>

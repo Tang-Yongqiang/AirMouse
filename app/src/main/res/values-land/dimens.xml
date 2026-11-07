@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 横屏可用高度只有 ~330dp，键盘五排得压矮，否则会顶到状态栏 -->
+    <dimen name="key_row_h">37dp</dimen>
+</resources>
