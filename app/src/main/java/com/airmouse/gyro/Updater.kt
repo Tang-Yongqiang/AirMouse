@@ -31,6 +31,17 @@ object Updater {
         "https://gitee.com/Tang-Yongqiang/AirMouse/raw/main/update.json"
     )
 
+    private const val OWNER = "Tang-Yongqiang"
+    private const val REPO = "AirMouse"
+
+    /**
+     * GitHub 的 tag 列表接口。它不走 CDN，所以**发版后立刻就能看到新 tag**，
+     * 而 jsDelivr 的分支（@main）快照会被缓存最长 12 小时——这就是「明明发了新版，
+     * App 还说已是最新」的根因。所以先问 tag，再按 tag 去 jsDelivr 取那个 tag 的清单
+     * （tag 是不可变快照，路径天然带版本，不会被旧缓存命中）。
+     */
+    private const val TAGS_URL = "https://api.github.com/repos/$OWNER/$REPO/tags?per_page=100"
+
     data class Info(
         val versionCode: Int,
         val versionName: String,
@@ -65,7 +76,20 @@ object Updater {
         Thread {
             var result: Result = Result(null, "没有可用的源")
             val errors = StringBuilder()
-            for (url in MANIFEST_URLS) {
+
+            // 第一步：问 GitHub 最新 tag（不走 CDN，无缓存）
+            val tag = try { latestTag() } catch (e: Exception) {
+                Diag.warn("UPD", "✗ tags 接口 " + (e.message ?: ""))
+                null
+            }
+            val urls = ArrayList<String>()
+            if (tag != null) {
+                urls.add("https://cdn.jsdelivr.net/gh/$OWNER/$REPO@$tag/update.json")
+                Diag.log("UPD", "最新 tag = $tag")
+            }
+            urls.addAll(MANIFEST_URLS)
+
+            for (url in urls) {
                 try {
                     val json = fetch(url)
                     val o = JSONObject(json)
@@ -90,6 +114,32 @@ object Updater {
             }
             handler.post { onResult(result) }
         }.apply { isDaemon = true }.start()
+    }
+
+    /** 取仓库里语义化版本最大的那个 tag（形如 v2.28），失败返回 null */
+    private fun latestTag(): String? {
+        val json = fetch(TAGS_URL)
+        val arr = org.json.JSONArray(json)
+        var best: String? = null
+        var bestCode = -1
+        for (i in 0 until arr.length()) {
+            val name = arr.getJSONObject(i).optString("name")
+            if (!name.startsWith("v")) continue
+            val code = versionCodeOf(name.substring(1))
+            if (code > bestCode) {
+                bestCode = code
+                best = name
+            }
+        }
+        return best
+    }
+
+    /** "2.28" -> 228；"2.9" -> 209，用来比较大小 */
+    private fun versionCodeOf(v: String): Int {
+        val p = v.trim().split(".")
+        val major = p.getOrNull(0)?.toIntOrNull() ?: return -1
+        val minor = p.getOrNull(1)?.toIntOrNull() ?: 0
+        return major * 100 + minor
     }
 
     private fun hostOf(url: String): String = try {

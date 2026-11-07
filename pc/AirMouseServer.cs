@@ -381,6 +381,43 @@ namespace AirMouse
             "https://gitee.com/Tang-Yongqiang/AirMouse/raw/main/update.json"
         };
 
+        /// <summary>
+        /// GitHub 的 tag 列表（不走 CDN、无缓存），用来发现最新版本。
+        /// jsDelivr 对分支（@main）有整仓快照缓存、最长 12 小时，光靠它判断新版本会滞后。
+        /// </summary>
+        public const string TagsUrl = "https://api.github.com/repos/Tang-Yongqiang/AirMouse/tags?per_page=100";
+
+        /// <summary>取语义化版本最大的 tag（形如 v2.28），失败返回 null</summary>
+        private static string LatestTag()
+        {
+            var json = Download(TagsUrl);
+            var ser = new JavaScriptSerializer();
+            var arr = ser.Deserialize<List<Dictionary<string, object>>>(json);
+            if (arr == null) return null;
+            string best = null;
+            int bestCode = -1;
+            foreach (var item in arr)
+            {
+                object n;
+                if (!item.TryGetValue("name", out n) || n == null) continue;
+                string name = n.ToString();
+                if (!name.StartsWith("v")) continue;
+                int code = VersionCodeOf(name.Substring(1));
+                if (code > bestCode) { bestCode = code; best = name; }
+            }
+            return best;
+        }
+
+        /// <summary>"2.28" -> 228；"2.9" -> 209</summary>
+        private static int VersionCodeOf(string v)
+        {
+            var parts = v.Split('.');
+            int major, minor = 0;
+            if (parts.Length == 0 || !int.TryParse(parts[0], out major)) return -1;
+            if (parts.Length > 1) int.TryParse(parts[1], out minor);
+            return major * 100 + minor;
+        }
+
         private void StartUpdateCheck()
         {
             var t = new Thread(() =>
@@ -391,7 +428,26 @@ namespace AirMouse
                     ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11;
                     string json = null;
                     var errors = new StringBuilder();
-                    foreach (var url in ManifestUrls)
+                    // 先问 GitHub 的 tag 列表（不走 CDN，发版立刻可见），再按 tag 取那个 tag 的清单；
+                    // jsDelivr 对分支（@main）有整仓快照缓存，最长 12 小时，靠它判断新版本会滞后。
+                    try
+                    {
+                        string tag = LatestTag();
+                        if (!string.IsNullOrEmpty(tag))
+                        {
+                            Log.Write("[i] 最新 tag = " + tag);
+                            string u = "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@" + tag + "/update.json";
+                            json = Download(u);
+                            Log.Write("[i] 更新源可用：" + HostOf(u));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Write("[i] tags 接口不可用 · " + ex.Message);
+                    }
+                    var urls = new List<string>();
+                    if (string.IsNullOrEmpty(json)) urls.AddRange(ManifestUrls);
+                    foreach (var url in urls)
                     {
                         try
                         {
