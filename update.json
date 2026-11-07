@@ -1,8 +1,8 @@
 {
-    "versionCode":  47,
-    "versionName":  "2.33",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.33/AirMouse-2.33.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.33/AirMouseServer-v2.33.zip",
-    "notes":  "· 修复：本机版本比线上新时，检查更新不再说「已是最新」（会提示线上最新是哪个）\n· 安装器：安装/卸载拆成两个程序，安装位置可自选（含 D 盘）\n· 安装完成后主窗口自动消失，只留「✓ 安装完成」\n· 重连最多 10 次，期间标题显示第几次",
+    "versionCode":  48,
+    "versionName":  "2.34",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.34/AirMouse-2.34.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.34/AirMouseServer-v2.34.zip",
+    "notes":  "· 新增：检查更新 → 应用内直接下载（进度 / 速度 / 可后台），下完一键拉起系统安装器，不再跳浏览器\n· 首次需要允许一次「安装未知应用」，面板里会给入口\n· 修复：本机比线上新时不再误报「已是最新」\n· 安装器：安装/卸载分离、安装位置可自选、装完主窗口自动消失",
     "publishedAt":  "2026-11-07"
 }

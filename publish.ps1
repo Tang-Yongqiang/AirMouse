@@ -95,7 +95,7 @@ Copy-Item $uninOut (Join-Path $rel 'AirMouseUninstall.exe') -Force
 $exeZip = Join-Path $rel "AirMouseServer-v$Version.zip"
 Remove-Item $exeZip -Force -ErrorAction SilentlyContinue
 $readme = Join-Path $rel '使用说明（先看这个）.txt'
-if (-not (Test-Path $readme)) { Set-Content -Path $readme -Encoding UTF8 -Value "解压后双击 AirMouseSetup.exe（弹 UAC 点“是”）→ 选安装位置 → 安装 / 更新 → 开始菜单打开 AirMouse 接收端。" }
+if (-not (Test-Path $readme)) { Copy-Item (Join-Path $root 'pc\使用说明（先看这个）.txt') $readme -Force }
 Compress-Archive -Path $setupOut, $readme -DestinationPath $exeZip -CompressionLevel Optimal
 Write-Host "[3/7] 已放入 releases\v$Version" -ForegroundColor Cyan
 

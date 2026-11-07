@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -182,5 +183,45 @@ object Updater {
             cm.setPrimaryClip(android.content.ClipData.newPlainText("AirMouse", text))
         } catch (_: Exception) {
         }
+    }
+
+    /** 系统允许本应用装 APK 吗（Android 8+ 按来源授权） */
+    fun canInstallApk(ctx: Context): Boolean = try {
+        if (android.os.Build.VERSION.SDK_INT >= 26) ctx.packageManager.canRequestPackageInstalls() else true
+    } catch (e: Exception) {
+        true
+    }
+
+    /** 跳到「安装未知应用」授权页，本应用高亮 */
+    fun openInstallSettings(ctx: Context) {
+        try {
+            val i = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + ctx.packageName))
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(i)
+        } catch (e: Exception) {
+            try {
+                ctx.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: Exception) {
+                android.widget.Toast.makeText(ctx, "请到系统设置里允许本应用安装应用", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** 把下载好的 APK 交给系统安装器 */
+    fun installApk(ctx: Context, file: java.io.File): String? = try {
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            ctx, ctx.packageName + ".fileprovider", file
+        )
+        val i = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        ctx.startActivity(i)
+        Diag.log("UPD", "已拉起系统安装器：" + file.name)
+        null
+    } catch (e: Exception) {
+        val why = e.javaClass.simpleName + ": " + (e.message ?: "")
+        Diag.warn("UPD", "拉起安装器失败 " + why)
+        why
     }
 }

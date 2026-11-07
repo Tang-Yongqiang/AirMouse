@@ -28,6 +28,7 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
@@ -203,6 +204,25 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         // 调试用：--ez diag true 直接打开诊断日志抽屉
         if (intent?.getBooleanExtra("updatecheck", false) == true) {
             main.postDelayed({ Updater.checkNow(this) { _ -> } }, 800)
+        }
+        // 调试用：--ez apkdl true 直接走一遍「应用内下载 → 安装器」（不发版也能测下载面板）
+        if (intent?.getBooleanExtra("apkdl", false) == true) {
+            val u = intent?.getStringExtra("apkurl")
+                ?: "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v2.33/AirMouse-2.33.apk"
+            val vm = intent?.getStringExtra("apkver") ?: "2.34-测试"
+            main.postDelayed({
+                startApkDownload(Updater.Info(9999, vm, u, null, null))
+            }, 900)
+        }
+        // 调试用：--ez apkinstall true 直接拿已下载的 APK 走一遍「拉起系统安装器」
+        if (intent?.getBooleanExtra("apkinstall", false) == true) {
+            main.postDelayed({
+                val f = Downloader.latestApk(this)
+                if (f == null) toast("还没有下载好的 APK") else {
+                    toast("尝试安装 " + f.name)
+                    Updater.installApk(this, f)?.let { why -> toast("打不开安装器：" + why) }
+                }
+            }, 900)
         }
         if (intent?.getBooleanExtra("settings", false) == true) {
             main.postDelayed({ showSettings() }, 600)
@@ -1436,10 +1456,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                         },
                         ok = "去下载",
                         cancel = "以后再说",
-                        onOk = {
-                            val url = info.apkUrl
-                            if (url == null) toast("这个版本没有提供下载地址") else Updater.openUrl(this, url)
-                        }
+                        onOk = { startApkDownload(info) }
                     )
                 }
             }
@@ -1812,5 +1829,104 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
 
     private fun toast(msg: String) {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+
+    /** 应用内下载 APK（带进度），下完直接交给系统安装器 */
+    private fun startApkDownload(info: Updater.Info) {
+        val url = info.apkUrl
+        if (url.isNullOrEmpty()) { toast("这个版本没有提供下载地址"); return }
+        val name = "AirMouse-" + info.versionName + ".apk"
+
+        Downloader.existing(this, name, 0L)?.let { f ->
+            toast("已经下载好了：" + Downloader.sizeText(f.length()))
+            askInstall(f)
+            return
+        }
+
+        val d = resources.displayMetrics.density
+        val px = { v: Int -> (v * d).toInt() }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, px(2), 0, 0)
+        }
+        val tvLine = TextView(this).apply {
+            textSize = 14f
+            text = "正在连接…"
+        }
+        val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progress = 0
+            layoutParams = LinearLayout.LayoutParams(-1, px(10)).apply { topMargin = px(10) }
+        }
+        val tvHint = TextView(this).apply {
+            textSize = 12f
+            alpha = 0.65f
+            setPadding(0, px(10), 0, 0)
+            text = "4 MB 左右，按现在的网速大约半分钟。点「后台」可以边下边用手机，下完会提示安装。"
+        }
+        box.addView(tvLine)
+        box.addView(bar)
+        box.addView(tvHint)
+
+        val sheet = showSheet(
+            "下载 " + info.versionName,
+            content = box,
+            ok = "后台",
+            cancel = "取消",
+            onOk = { toast("继续在后台下载，完成会提示你安装") }
+        )
+
+        var task: Downloader.Task? = null
+        task = Downloader.start(
+            this, url, name, 0L,
+            onProgress = { p ->
+                if (sheet.isShowing) {
+                    bar.progress = p.percent
+                    tvLine.text = "已下载 " + Downloader.sizeText(p.bytes) + " / " + Downloader.sizeText(p.total) +
+                        " · " + p.percent + "%" +
+                        (if (p.bytesPerSec > 0) " · " + Downloader.speedText(p.bytesPerSec) else "")
+                }
+            },
+            onDone = { f ->
+                if (sheet.isShowing) sheet.dismiss()
+                askInstall(f)
+            },
+            onError = { why ->
+                if (sheet.isShowing) {
+                    bar.progress = 0
+                    tvLine.text = "下载失败：" + why
+                } else {
+                    toast("下载失败：" + why)
+                }
+            }
+        )
+        sheet.findViewById<Button>(R.id.dlgCancel)?.setOnClickListener {
+            task?.cancel()
+            sheet.dismiss()
+        }
+    }
+
+    /** 问一句「装吗」，顺带处理「允许安装未知应用」 */
+    private fun askInstall(file: java.io.File) {
+        if (!Updater.canInstallApk(this)) {
+            showSheet(
+                "还要允许一次安装",
+                "系统默认不许应用自己装 APK。点「去设置」找到「陀螺仪鼠标」→ 打开「允许安装未知应用」，回来再点一次安装就行（只需一次）。",
+                ok = "去设置",
+                cancel = "以后再说",
+                onOk = { Updater.openInstallSettings(this) }
+            )
+            return
+        }
+        showSheet(
+            "下载完成",
+            file.name + " · " + Downloader.sizeText(file.length()),
+            ok = "安装",
+            cancel = "以后再说",
+            onOk = {
+                Updater.installApk(this, file)?.let { why -> toast("打不开安装器：" + why) }
+            }
+        )
     }
 }
