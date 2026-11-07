@@ -1,8 +1,14 @@
 {
-    "versionCode":  58,
-    "versionName":  "1.0.9",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.9/AirMouse-1.0.9.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.9/AirMouseServer-v1.0.9.zip",
-    "notes":  "· 修「检查更新」文案：查到的版本比本机旧时（CDN 缓存没跟上）显示「已是最新」，不再说「线上最新是旧版本」\n· 6 个候选版本号并发查，2~3 秒出结果；按 tag 取清单 jsDelivr 不通自动换 raw\n· 图标、版本码显示沿用 1.0.5",
+    "proto":  1,
+    "apk":  {
+                "versionCode":  59,
+                "versionName":  "1.1.0",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.1.0/AirMouse-1.1.0.apk"
+            },
+    "server":  {
+                   "version":  "1.1.0",
+                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.1.0/AirMouseServer-v1.1.0.zip"
+               },
+    "notes":  "· 手机端和电脑端版本号分开了，各自提示各自的更新\n· 电脑端不用再跟着手机端升级\n· 图标、版本显示、状态栏文案继续沿用 1.0.x 的改动",
     "publishedAt":  "2026-11-07"
 }

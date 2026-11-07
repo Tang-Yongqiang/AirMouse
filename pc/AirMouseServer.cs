@@ -478,6 +478,16 @@ namespace AirMouse
             var ser = new JavaScriptSerializer();
             var map = ser.Deserialize<Dictionary<string, object>>(json);
             object v;
+            // 新结构：{ "apk": { "versionCode": 58, ... } }；旧结构：顶层 versionCode
+            if (map != null && map.TryGetValue("apk", out v) && v != null)
+            {
+                var apk = v as Dictionary<string, object>;
+                if (apk != null && apk.TryGetValue("versionCode", out v) && v != null)
+                {
+                    int code;
+                    if (int.TryParse(v.ToString(), out code)) return code;
+                }
+            }
             if (map != null && map.TryGetValue("versionCode", out v) && v != null)
             {
                 int code;
@@ -597,8 +607,20 @@ namespace AirMouse
                     var map = ser.Deserialize<Dictionary<string, object>>(json);
                     if (map == null) return;
                     object v;
-                    string name = map.TryGetValue("versionName", out v) && v != null ? v.ToString() : "";
-                    string exe = map.TryGetValue("exe", out v) && v != null ? v.ToString() : "";
+                    // 电脑端只认 server 这一段；老清单只有顶层 versionName/exe，兼容一下
+                    string name = "";
+                    string exe = "";
+                    if (map.TryGetValue("server", out v) && v != null)
+                    {
+                        var srv = v as Dictionary<string, object>;
+                        if (srv != null)
+                        {
+                            if (srv.TryGetValue("version", out v) && v != null) name = v.ToString();
+                            if (srv.TryGetValue("url", out v) && v != null) exe = v.ToString();
+                        }
+                    }
+                    if (string.IsNullOrEmpty(name) && map.TryGetValue("versionName", out v) && v != null) name = v.ToString();
+                    if (string.IsNullOrEmpty(exe) && map.TryGetValue("exe", out v) && v != null) exe = v.ToString();
                     string notes = map.TryGetValue("notes", out v) && v != null ? v.ToString() : "";
                     if (string.IsNullOrEmpty(name)) return;
                     if (!IsNewer(name)) return;

@@ -199,10 +199,13 @@ object Updater {
     private fun parse(json: String): Info {
         val o = JSONObject(json)
         val info = Info(
-            versionCode = o.optInt("versionCode", 0),
-            versionName = o.optString("versionName", ""),
-            apkUrl = o.optString("apk").ifEmpty { null },
-            exeUrl = o.optString("exe").ifEmpty { null },
+            versionCode = o.optJSONObject("apk")?.optInt("versionCode", 0) ?: o.optInt("versionCode", 0),
+            versionName = o.optJSONObject("apk")?.optString("versionName", "")?.ifEmpty { null }
+                ?: o.optString("versionName", ""),
+            apkUrl = o.optJSONObject("apk")?.optString("url", "")?.ifEmpty { null }
+                ?: o.optString("apk").ifEmpty { null },
+            exeUrl = o.optJSONObject("server")?.optString("url", "")?.ifEmpty { null }
+                ?: o.optString("exe").ifEmpty { null },
             notes = o.optString("notes").ifEmpty { null }
         )
         if (info.versionCode <= 0) throw RuntimeException("update.json 里没有 versionCode")
