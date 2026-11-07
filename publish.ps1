@@ -100,20 +100,28 @@ if ($LASTEXITCODE -ne 0) { throw "csc 编译卸载器失败" }
 if ($LASTEXITCODE -ne 0) { throw "csc 编译安装器失败" }
 Write-Host "[2/7] 编译完成：APK $([math]::Round((Get-Item $apkOut).Length/1MB,2)) MB / EXE $((Get-Item $exeOut).Length) B / Setup $((Get-Item $setupOut).Length) B" -ForegroundColor Cyan
 
-# 3) 放进 releases/v<手机端版本>
-$rel = Join-Path $root "releases\v$AppVersion"
-New-Item -ItemType Directory -Path $rel -Force | Out-Null
-Copy-Item $apkOut (Join-Path $rel "AirMouse-$AppVersion.apk") -Force
-Copy-Item $exeOut (Join-Path $rel 'AirMouseServer.exe') -Force
-Copy-Item $hookOut (Join-Path $rel 'AirMouseHook.dll') -Force
-Copy-Item $setupOut (Join-Path $rel 'AirMouseSetup.exe') -Force
-Copy-Item $uninOut (Join-Path $rel 'AirMouseUninstall.exe') -Force
-$exeZip = Join-Path $rel "AirMouseServer-v$ServerVersion.zip"
+# 3) 两端各自一个目录：releases\app-v<手机端> / releases\server-v<电脑端>
+$appRel = Join-Path $root "releases\app-v$AppVersion"
+$srvRel = Join-Path $root "releases\server-v$ServerVersion"
+New-Item -ItemType Directory -Path $appRel -Force | Out-Null
+New-Item -ItemType Directory -Path $srvRel -Force | Out-Null
+Copy-Item $apkOut (Join-Path $appRel "AirMouse-$AppVersion.apk") -Force
+Copy-Item $exeOut (Join-Path $srvRel 'AirMouseServer.exe') -Force
+Copy-Item $hookOut (Join-Path $srvRel 'AirMouseHook.dll') -Force
+Copy-Item $setupOut (Join-Path $srvRel 'AirMouseSetup.exe') -Force
+Copy-Item $uninOut (Join-Path $srvRel 'AirMouseUninstall.exe') -Force
+$exeZip = Join-Path $srvRel "AirMouseServer-v$ServerVersion.zip"
 Remove-Item $exeZip -Force -ErrorAction SilentlyContinue
-$readme = Join-Path $rel '使用说明（先看这个）.txt'
-if (-not (Test-Path $readme)) { Copy-Item (Join-Path $root 'pc\使用说明（先看这个）.txt') $readme -Force }
-Compress-Archive -Path $setupOut, $readme -DestinationPath $exeZip -CompressionLevel Optimal
-Write-Host "[3/7] 已放入 releases\v$AppVersion（电脑端 zip: AirMouseServer-v$ServerVersion.zip）" -ForegroundColor Cyan
+$readmeSrc = Join-Path $root 'pc\使用说明（先看这个）.txt'
+Compress-Archive -Path $setupOut, $readmeSrc -DestinationPath $exeZip -CompressionLevel Optimal
+Copy-Item $readmeSrc (Join-Path $srvRel '使用说明（先看这个）.txt') -Force
+
+# 给人发的一整包（放在 dist\，不进仓库，避免撑爆 jsDelivr 的 50 MB 上限）
+$sendZip = Join-Path $root "dist\AirMouse-$AppVersion-发送包.zip"
+Remove-Item $sendZip -Force -ErrorAction SilentlyContinue
+Compress-Archive -Path $apkOut, $setupOut, $readmeSrc -DestinationPath $sendZip -CompressionLevel Optimal
+Write-Host "[3/7] APK → releases\app-v$AppVersion；电脑端 → releases\server-v$ServerVersion" -ForegroundColor Cyan
+Write-Host "      要发给别人的一个包：dist\AirMouse-$AppVersion-发送包.zip（$([math]::Round((Get-Item $sendZip).Length/1MB,2)) MB）" -ForegroundColor Cyan
 
 # 4) update.json：apk / server 两段分开写
 $manifest = [ordered]@{
@@ -121,19 +129,24 @@ $manifest = [ordered]@{
     apk = [ordered]@{
         versionCode = $code
         versionName = $AppVersion
-        url = "https://cdn.jsdelivr.net/gh/$Repo@main/releases/v$AppVersion/AirMouse-$AppVersion.apk"
+        url = "https://cdn.jsdelivr.net/gh/$Repo@main/releases/app-v$AppVersion/AirMouse-$AppVersion.apk"
     }
     server = [ordered]@{
         version = $ServerVersion
-        url = "https://cdn.jsdelivr.net/gh/$Repo@main/releases/v$AppVersion/AirMouseServer-v$ServerVersion.zip"
+        url = "https://cdn.jsdelivr.net/gh/$Repo@main/releases/server-v$ServerVersion/AirMouseServer-v$ServerVersion.zip"
     }
     notes = $Notes
     publishedAt = (Get-Date -Format 'yyyy-MM-dd')
 }
 $json = $manifest | ConvertTo-Json -Depth 6
-# 只保留最近 3 个版本目录：jsDelivr 对超过 50 MB 的仓库直接拒绝服务
-$keep = @((Get-ChildItem (Join-Path $root 'releases') -Directory | Sort-Object Name -Descending | Select-Object -First 3) | ForEach-Object { $_.Name })
-Get-ChildItem (Join-Path $root 'releases') -Directory | Where-Object { $keep -notcontains $_.Name } | ForEach-Object {
+# 剪枝：手机端/电脑端各只留最近 3 个目录（jsDelivr 对超过 50 MB 的仓库直接拒绝服务）
+$relRoot = Join-Path $root 'releases'
+$keep = @()
+foreach ($prefix in @('app-v', 'server-v')) {
+    $keep += @(Get-ChildItem $relRoot -Directory | Where-Object { $_.Name -like "$prefix*" } |
+        Sort-Object Name -Descending | Select-Object -First 3 | ForEach-Object { $_.Name })
+}
+Get-ChildItem $relRoot -Directory | Where-Object { $keep -notcontains $_.Name } | ForEach-Object {
     Write-Host "[3b] 清理旧版本目录 $($_.Name)" -ForegroundColor DarkGray
     & git -C $root rm -r --quiet "releases/$($_.Name)"
 }
@@ -162,7 +175,8 @@ catch { Write-Warning "jsDelivr 刷新失败，稍后手动打开：$purge" }
 
 Write-Host ""
 Write-Host "完成。下载地址：" -ForegroundColor Green
-Write-Host "  APK : https://cdn.jsdelivr.net/gh/$Repo@main/releases/v$AppVersion/AirMouse-$AppVersion.apk"
-Write-Host "  EXE : https://cdn.jsdelivr.net/gh/$Repo@main/releases/v$AppVersion/AirMouseServer-v$ServerVersion.zip"
+Write-Host "  APK : https://cdn.jsdelivr.net/gh/$Repo@main/releases/app-v$AppVersion/AirMouse-$AppVersion.apk"
+Write-Host "  EXE : https://cdn.jsdelivr.net/gh/$Repo@main/releases/server-v$ServerVersion/AirMouseServer-v$ServerVersion.zip"
+Write-Host "  发人: dist\AirMouse-$AppVersion-发送包.zip"
 Write-Host "  清单: https://cdn.jsdelivr.net/gh/$Repo@main/update.json"
 Write-Host "  仓库: https://github.com/$Repo"
