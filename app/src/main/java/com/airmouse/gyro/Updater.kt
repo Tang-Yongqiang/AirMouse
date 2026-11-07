@@ -1,4 +1,4 @@
-﻿package com.airmouse.gyro
+package com.airmouse.gyro
 
 import android.content.Context
 import android.content.Intent
@@ -42,6 +42,7 @@ object Updater {
      * （tag 是不可变快照，路径天然带版本，不会被旧缓存命中）。
      */
     private const val TAGS_URL = "https://api.github.com/repos/$OWNER/$REPO/tags?per_page=100"
+    private const val LATEST_TAG_URL = "https://raw.githubusercontent.com/$OWNER/$REPO/main/latest.txt"
 
     data class Info(
         val versionCode: Int,
@@ -125,6 +126,13 @@ object Updater {
      * （比如内部迭代到 2.34 之后，对外首发叫 1.0.0）。
      */
     private fun latestTag(): String? {
+        // 首选仓库里的小文件 latest.txt（raw 不走 CDN、没有限流），内容就一行 v1.0.0。
+        // 拿不到再退回 GitHub tags 接口。
+        try {
+            val txt = fetch(LATEST_TAG_URL).trim()
+            if (txt.matches(Regex("v\\d+(\\.\\d+){1,3}"))) return txt
+        } catch (_: Exception) {
+        }
         val json = fetch(TAGS_URL)
         val arr = org.json.JSONArray(json)
         for (i in 0 until arr.length()) {

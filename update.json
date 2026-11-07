@@ -1,8 +1,8 @@
 {
-    "versionCode":  49,
-    "versionName":  "1.0.0",
-    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.0/AirMouse-1.0.0.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.0/AirMouseServer-v1.0.0.zip",
-    "notes":  "· 第一个正式版（对外首发）\n· 手机端：检查更新 → 应用内下载（进度/速度/可后台）→ 一键拉起安装器\n· 电脑端：一个安装程序搞定（内嵌接收端与钩子、需管理员、装完自启）\n· 版本号改为三段式 1.0.0",
+    "versionCode":  50,
+    "versionName":  "1.0.1",
+    "apk":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.1/AirMouse-1.0.1.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/v1.0.1/AirMouseServer-v1.0.1.zip",
+    "notes":  "· 修正：检查更新改为先读仓库里的 latest.txt（不走 CDN、不受接口限流），发版后立刻可见\n· 首个正式版 1.0.0 的全部内容",
     "publishedAt":  "2026-11-07"
 }

@@ -471,10 +471,18 @@ namespace AirMouse
         /// jsDelivr 对分支（@main）有整仓快照缓存、最长 12 小时，光靠它判断新版本会滞后。
         /// </summary>
         public const string TagsUrl = "https://api.github.com/repos/Tang-Yongqiang/AirMouse/tags?per_page=100";
+        public const string LatestTagUrl = "https://raw.githubusercontent.com/Tang-Yongqiang/AirMouse/main/latest.txt";
 
         /// <summary>取语义化版本最大的 tag（形如 v2.28），失败返回 null</summary>
         private static string LatestTag()
         {
+            // 首选仓库里的 latest.txt（raw 不走 CDN、没有限流），内容就一行 v1.0.0；拿不到再退回 tags 接口
+            try
+            {
+                string txt = Download(LatestTagUrl).Trim();
+                if (System.Text.RegularExpressions.Regex.IsMatch(txt, @"^v\d+(\.\d+){1,3}$")) return txt;
+            }
+            catch { }
             var json = Download(TagsUrl);
             var ser = new JavaScriptSerializer();
             var arr = ser.Deserialize<List<Dictionary<string, object>>>(json);

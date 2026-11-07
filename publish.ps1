@@ -124,6 +124,8 @@ Write-Host "[5/7] 已提交" -ForegroundColor Cyan
 
 # 6) 打 tag + 推送
 & git tag -f "v$Version"
+Set-Content -Path (Join-Path $root 'latest.txt') -Value "v$Version" -Encoding ASCII -NoNewline
+& git add latest.txt
 $env:GIT_SSH_COMMAND = 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new'
 & git push origin main
 & git push origin "v$Version"
