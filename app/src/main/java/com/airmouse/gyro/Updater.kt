@@ -71,7 +71,15 @@ object Updater {
         check(ctx, onResult)
     }
 
+    /** 本机版本名，例如 1.0.3（用来往后猜下一个版本） */
+    private fun myVersionName(ctx: Context): String = try {
+        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0.0.0"
+    } catch (e: Exception) {
+        "0.0.0"
+    }
+
     private fun check(ctx: Context, onResult: (Result) -> Unit) {
+        val me = myVersionName(ctx)
         val handler = Handler(Looper.getMainLooper())
         Thread {
             var result: Result = Result(null, "没有可用的源")
@@ -80,6 +88,32 @@ object Updater {
             // 为什么不是只读 @main：jsDelivr 的分支快照会卡住（我们实测过一直停在旧版本），
             // 而按 tag 取是不可变快照、发版后立刻就能拿到。所以先问 GitHub 的 tags 接口，
             // 再按 tag 逐个取清单，挑 versionCode 最大的那个（不依赖接口返回顺序）。
+            // 先用「本地版本号往后猜」：我们是自己按 1.0.1、1.0.2 顺序发版，猜 3 个就够。
+            // 这条路不碰任何接口/CDN 缓存，最稳。
+            val guessed = ArrayList<String>()
+            val lp = me.split(".")
+            if (lp.size >= 2) {
+                val major = lp[0].toIntOrNull()
+                val minor = lp[1].toIntOrNull()
+                val patch = lp.getOrNull(2)?.toIntOrNull() ?: 0
+                if (major != null && minor != null) {
+                    for (step in 1..3) guessed.add("v$major.$minor.${patch + step}")
+                }
+            }
+            var bestGuess: Info? = null
+            for (t in guessed) {
+                try {
+                    val info = parse(fetch("https://cdn.jsdelivr.net/gh/$OWNER/$REPO@$t/update.json"))
+                    Diag.log("UPD", "✓ 猜测 @" + t + " versionCode=" + info.versionCode)
+                    if (bestGuess == null || info.versionCode > bestGuess.versionCode) bestGuess = info
+                } catch (_: Exception) {
+                }
+            }
+            if (bestGuess != null) {
+                handler.post { onResult(Result(bestGuess, null)) }
+                return@Thread
+            }
+
             val tags = try { fetchTags() } catch (e: Exception) {
                 Diag.warn("UPD", "✗ tags 接口 " + (e.message ?: ""))
                 emptyList()

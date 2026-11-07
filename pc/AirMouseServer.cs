@@ -495,11 +495,33 @@ namespace AirMouse
                     ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11;
                     string json = null;
                     var errors = new StringBuilder();
+                    // 第一步：直接用「本机版本号往后猜」去取清单（我们自己按 1.0.1、1.0.2 顺序发版，
+                    // 猜 3 个就够）。这条路不碰接口、也不碰 CDN 的分支缓存，最稳。
+                    try
+                    {
+                        var cur = typeof(MainForm).Assembly.GetName().Version;
+                        for (int step = 1; step <= 3; step++)
+                        {
+                            string gt = "v" + cur.Major + "." + cur.Minor + "." + (cur.Build + step);
+                            string gu = "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@" + gt + "/update.json";
+                            try
+                            {
+                                string body = Download(gu);
+                                Log.Write("[i] 猜测 @" + gt + " versionCode=" + ManifestCode(body));
+                                if (string.IsNullOrEmpty(json) || ManifestCode(body) > ManifestCode(json)) json = body;
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+
+                    // 第二步（猜不到时）：问 tags 接口，再按 tag 逐个取清单。
                     // 为什么不是只读 @main：jsDelivr 的分支快照会卡住（实测一直停在旧版本），
                     // 而按 tag 取是不可变快照、发版后立刻就能拿到。先问 tags 接口，再按 tag 逐个取清单，
                     // 挑 versionCode 最大的那个（不依赖接口返回顺序）。
                     try
                     {
+                        if (!string.IsNullOrEmpty(json)) throw new Exception("skip");
                         var tagsJson = Download(TagsUrl);
                         var ser0 = new JavaScriptSerializer();
                         var tags = ser0.Deserialize<List<Dictionary<string, object>>>(tagsJson);
