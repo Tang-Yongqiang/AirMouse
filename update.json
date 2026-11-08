@@ -1,19 +1,19 @@
 {
     "proto":  1,
-    "versionCode":  75,
-    "versionName":  "1.1.16",
-    "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.16/AirMouse-1.1.16.apk",
+    "versionCode":  76,
+    "versionName":  "1.1.17",
+    "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.17/AirMouse-1.1.17.apk",
     "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.9/AirMouseServer-v1.1.9.zip",
     "apk":  {
-                "versionCode":  75,
-                "versionName":  "1.1.16",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.16/AirMouse-1.1.16.apk",
-                "notes":  "· 连上电脑后会互相确认版本：两端不配套时直接提示，不再出现「看着连上了、操作却没反应」\n· 检查更新改为直接读线上最新信息，电脑端单独更新也能马上知道\n· 更新说明继续显示「从你当前版本到最新版本」的全部改动"
+                "versionCode":  76,
+                "versionName":  "1.1.17",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.17/AirMouse-1.1.17.apk",
+                "notes":  "· 点状态栏那一行现在真的能点了：蓝牙弹设备面板，WiFi 弹 IP 设置，USB 给出接线提示\n· 连接方式下拉只留三个模式，配对入口挪到了状态栏点击里\n· 手机输入法打字的「取消」不再收起面板，还能接着按 Esc / Tab / ⌫ / ⏎；点「发送」才回触摸板\n· 多版本的更新说明改成越新越靠前，先看到这一版改了什么"
             },
     "server":  {
                    "version":  "1.1.9",
                    "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.9/AirMouseServer-v1.1.9.zip",
-                   "notes":  "· 手机连上时会显示它装的是哪一版；两端版本不配套会明确提示\n· 检查更新优先读线上最新信息，电脑端单独发版也能马上发现\n· 沿用上一轮的窗口修正：底部按钮不再重叠，「查看日志」能完整显示",
+                   "notes":  "",
                    "minForApk":  ""
                },
     "history":  [
@@ -46,8 +46,13 @@
                         "versionCode":  75,
                         "versionName":  "1.1.16",
                         "notes":  "· 连上电脑后会互相确认版本：两端不配套时直接提示，不再出现「看着连上了、操作却没反应」\n· 检查更新改为直接读线上最新信息，电脑端单独更新也能马上知道\n· 更新说明继续显示「从你当前版本到最新版本」的全部改动"
+                    },
+                    {
+                        "versionCode":  76,
+                        "versionName":  "1.1.17",
+                        "notes":  "· 点状态栏那一行现在真的能点了：蓝牙弹设备面板，WiFi 弹 IP 设置，USB 给出接线提示\n· 连接方式下拉只留三个模式，配对入口挪到了状态栏点击里\n· 手机输入法打字的「取消」不再收起面板，还能接着按 Esc / Tab / ⌫ / ⏎；点「发送」才回触摸板\n· 多版本的更新说明改成越新越靠前，先看到这一版改了什么"
                     }
                 ],
-    "notes":  "· 连上电脑后会互相确认版本：两端不配套时直接提示，不再出现「看着连上了、操作却没反应」\n· 检查更新改为直接读线上最新信息，电脑端单独更新也能马上知道\n· 更新说明继续显示「从你当前版本到最新版本」的全部改动",
+    "notes":  "· 点状态栏那一行现在真的能点了：蓝牙弹设备面板，WiFi 弹 IP 设置，USB 给出接线提示\n· 连接方式下拉只留三个模式，配对入口挪到了状态栏点击里\n· 手机输入法打字的「取消」不再收起面板，还能接着按 Esc / Tab / ⌫ / ⏎；点「发送」才回触摸板\n· 多版本的更新说明改成越新越靠前，先看到这一版改了什么",
     "publishedAt":  "2026-11-08"
 }

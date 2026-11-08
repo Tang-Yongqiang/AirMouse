@@ -359,15 +359,25 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         btnModeMenu.setOnClickListener { showModeMenu() }
         btnGyroMenu.setOnClickListener { showGyroMenu() }
 
-        statusBox.setOnClickListener {
-            // 连接失败/异常时点这里就重连（省得进设置）；否则点了是改 IP / 换设备
+        // 状态区域点击：失败/异常时重连，否则按模式给出该模式该做的事。
+        // 注意：listener 要同时挂到标题/副标题上 —— 有些 ROM 里子 TextView 自己吃掉点击，
+        // 只挂在 statusBox 上会出现「点了完全没反应」（实测 ColorOS 就是）。
+        val onStatusTap = View.OnClickListener {
             if (enabled && mode != Prefs.MODE_BT && (netState == NetInput.State.FAILED || netState == NetInput.State.ERROR)) {
                 net.retryNow()
                 toast("正在重新连接…")
-                return@setOnClickListener
+                return@OnClickListener
             }
-            if (mode == Prefs.MODE_BT) pickDevice() else showNetSettings()
+            when (mode) {
+                Prefs.MODE_BT -> pickDevice()
+                Prefs.MODE_USB -> toast("USB 模式：插上数据线就行；识别不到就检查手机的「USB 调试」是否打开")
+                else -> showNetSettings()
+            }
         }
+        statusBox.setOnClickListener(onStatusTap)
+        statusTitle.setOnClickListener(onStatusTap)
+        statusSub.setOnClickListener(onStatusTap)
+        statusDot.setOnClickListener(onStatusTap)
 
         switchEnable.setOnCheckedChangeListener { _, checked ->
             if (checked != enabled) setEnabled(checked, true)
@@ -782,7 +792,8 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         val cur = currentVersionCode()
         val newer = info.history
             .filter { it.versionCode > cur && it.notes.isNotBlank() }
-            .sortedBy { it.versionCode }
+            // 越新的版本越靠前（用户要求：先看到最新这一版改了什么）
+            .sortedByDescending { it.versionCode }
         val body: String = if (newer.size >= 2) {
             newer.joinToString("\n\n") { v ->
                 val name = v.versionName.ifBlank { v.versionCode.toString() }
@@ -919,15 +930,11 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
 
     /** 连接方式下拉：贴着按钮弹出的列表（不是居中弹窗），选中的一行高亮 */
     private fun showModeMenu() {
-        // 第 4 项不是「模式」，是配对新电脑的入口 —— 蓝牙那套低频操作从设置里搬过来
-        val names = arrayOf("蓝牙 HID", "WiFi（填电脑 IP）", "USB（插线即用）", "配对新电脑…")
+        // 下拉里只放「模式」。蓝牙的配对/选电脑这类动作挪到状态栏点击里（点左上角那行提示）。
+        val names = arrayOf("蓝牙 HID", "WiFi（填电脑 IP）", "USB（插线即用）")
         val values = intArrayOf(Prefs.MODE_BT, Prefs.MODE_WIFI, Prefs.MODE_USB)
         val checked = values.indexOf(mode).coerceAtLeast(0)
         showDropDown(btnModeMenu, names, checked) { which ->
-            if (which == 3) {
-                pickDevice()
-                return@showDropDown
-            }
             if (mode != values[which]) {
                 mode = values[which]
                 // 换通道不带着上一次「恢复陀螺仪」的意图
@@ -1243,6 +1250,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             return
         }
         if (!adapter.isEnabled) {
+            toast("蓝牙没开，先打开蓝牙")
             try {
                 startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             } catch (e: Exception) {
@@ -1251,7 +1259,18 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             return
         }
         if (!hid.hasPermission()) {
-            requestBluetoothPermissions()
+            // 这里以前是「申请一下权限然后静默 return」—— 权限被拒过一次后系统不再弹窗，看着就是点了没反应
+            toast("列出已配对的电脑需要「附近的设备」权限")
+            try {
+                startActivity(
+                    Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", packageName, null)
+                    )
+                )
+            } catch (e: Exception) {
+                requestBluetoothPermissions()
+            }
             return
         }
         val bonded: List<BluetoothDevice> = try {
@@ -1416,9 +1435,9 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             onOk = {
                 sent = true
                 sendComposedText(input.text.toString())
-                // 发完不收起面板，而是停在「手机输入法」页 —— 那里有 esc/tab/⌫/⏎ 四个快捷键，
-                // 发完通常紧接着要按回车或 Tab（以前这里是收起面板，回车还得重新点开）
-                keyboard.imeMode = true
+                // 发送 = 这一轮打字结束，收起面板回触摸板
+                hideKeyboardPanel()
+                updateGyroForKeyboard(false)
             },
             onShown = { s ->
                 // 抽屉贴到窗口上之后再要软键盘才生效；光设 softInputMode 在部分 ROM 上不弹，补一次 showSoftInput
@@ -1433,12 +1452,13 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                 }, 260)
             }
         )
-        // 取消 / 点空白 / 返回键关掉弹窗（也就是没点「发送」）：直接把键盘面板收起来回到触摸板。
-        // 以前这种情况面板会留在「手机输入法」页、露出那四个快捷键，看着像跳到了直通键码页。
+        // 取消 / 点空白 / 返回键（没点「发送」）：**不收起面板**，回到「手机输入法」这一页 ——
+        // 这页上就是那排 esc / tab / ⌫ / ⏎ 快捷键，还能顺手切回「直通键码」。
+        // 只有点「发送」才算这一轮结束、回触摸板（见上面的 onOk）。
         sheet.setOnDismissListener {
             if (!sent) {
-                hideKeyboardPanel()
-                updateGyroForKeyboard(false)
+                keyboard.imeMode = true
+                if (!keyboard.isShown) showKeyboardPanel()
             }
         }
         // 调试用：HyperOS 会拦 adb 注入点击（INJECT_EVENTS），这里用开关替人点一下

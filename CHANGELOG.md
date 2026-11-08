@@ -2,6 +2,22 @@
 
 > 技术记录，给开发/维护看。普通用户看到的说明在 `update.json` 的 `notes` 里（发版时用 `publish.ps1 -TechNotesFile` 分开写）。
 
+## 1.1.17 · 2026-11-08（电脑端 1.1.9）
+
+**用户可见**
+- · 点状态栏那一行现在真的能点了：蓝牙弹设备面板，WiFi 弹 IP 设置，USB 给出接线提示
+- · 连接方式下拉只留三个模式，配对入口挪到了状态栏点击里
+- · 手机输入法打字的「取消」不再收起面板，还能接着按 Esc / Tab / ⌫ / ⏎；点「发送」才回触摸板
+- · 多版本的更新说明改成越新越靠前，先看到这一版改了什么
+
+**技术细节**
+- - UI：`statusBox/statusTitle/statusSub/statusDot` 四个控件都挂 `onStatusTap`（ColorOS 下子 TextView 会吃掉点击，只挂外层表现为「点了没反应」）
+- - UI：`showModeMenu()` 去掉第 4 项「配对新电脑…」，蓝牙动作统一走状态栏 → `pickDevice()`
+- - UI：`pickDevice()` 三处静默返回补提示（无蓝牙 → toast；蓝牙没开 → toast + 系统对话框；无 BLUETOOTH_CONNECT → toast + 跳应用详情页）
+- - 键盘：`showImeDialog()` 的 `onOk` 改为发送后 `hideKeyboardPanel()`；`setOnDismissListener` 未发送时保留面板并置 `keyboard.imeMode = true`
+- - 更新：`updateNotesText()` 的 history 改为 `sortedByDescending { it.versionCode }`
+- - 电脑端代码未变，版本号保持 1.1.9
+
 ## 1.1.16 · 2026-11-08（电脑端 1.1.9）
 
 **用户可见**
