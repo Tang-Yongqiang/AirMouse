@@ -775,8 +775,9 @@ namespace AirMouse
         public MainForm()
         {
             Text = AppTitle + " " + CurrentVersion();
-            ClientSize = new Size(700, 470);
-            MinimumSize = new Size(480, 360);
+            // 窗口得容得下底部 5 个按钮 + 勾选框（760 时「查看日志」会被挤到第二行，820 够用）。
+            ClientSize = new Size(820, 520);
+            MinimumSize = new Size(520, 380);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Microsoft YaHei UI", 9f);
 
@@ -946,23 +947,27 @@ namespace AirMouse
             btnRow.Controls.Add(openLog);
 
             // 底部一条：左边勾选框、右边按钮组。用 TableLayoutPanel 分两列，
-            // 勾选框占 AutoSize 列，按钮占剩余宽度并右对齐 —— 任何 DPI/窗口宽度下都不会互相压住。
+            // 勾选框占 AutoSize 列，按钮占剩余宽度并右对齐。
+            // 按钮组开 WrapContents：窗口拖窄时按钮换行，而不是互相压住/被裁掉。
             var bottom = new TableLayoutPanel();
             bottom.Dock = DockStyle.Bottom;
-            bottom.Height = 48;
+            bottom.AutoSize = true;
+            bottom.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             bottom.ColumnCount = 2;
             bottom.RowCount = 1;
             bottom.Padding = new Padding(10, 4, 8, 4);
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            bottom.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            bottom.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             _autostart.Dock = DockStyle.Fill;
-            _autostart.Margin = new Padding(0, 0, 10, 0);
+            _autostart.Margin = new Padding(0, 6, 10, 0);
 
             btnRow.Dock = DockStyle.Fill;
             btnRow.Padding = new Padding(0);
             btnRow.Margin = new Padding(0);
+            btnRow.WrapContents = true;
+            btnRow.AutoSizeMode = AutoSizeMode.GrowAndShrink;
 
             bottom.Controls.Add(_autostart, 0, 0);
             bottom.Controls.Add(btnRow, 1, 0);
@@ -1250,7 +1255,9 @@ namespace AirMouse
             _status.ForeColor = Color.FromArgb(20, 120, 60);
             Log.Write("AirMouse 接收端已启动，监听 0.0.0.0:" + Port);
             Log.Write("[i] 日志文件：" + (Log.LogPath ?? "（无）"));
-            foreach (var ip in ips) Log.Write("  本机 IP：" + ip);
+            // 注意：ips 是 List<Nic>，直接拼对象会打出类型名（AirMouse.MainForm+Nic），
+            // 这里要取 .Ip，顺手把网卡名带上，方便判断是哪张卡。
+            foreach (var ip in ips) Log.Write("  本机 IP：" + ip.Ip + "（" + ip.Name + "）");
             Log.Write("  手机端：连接方式选 WiFi → 填上面的 IP（要和手机同一网段）→ 连接");
             if (HasFirewallRule())
                 Log.Write("  [i] 防火墙：本程序的放行规则在，手机应该能连上");

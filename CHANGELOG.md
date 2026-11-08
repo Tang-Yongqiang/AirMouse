@@ -2,6 +2,17 @@
 
 > 技术记录，给开发/维护看。普通用户看到的说明在 `update.json` 的 `notes` 里（发版时用 `publish.ps1 -TechNotesFile` 分开写）。
 
+## 1.1.15 · 2026-11-08（电脑端 1.1.8）
+
+**用户可见**
+- · 手机端这一版和 1.1.14 一样，没有功能变化
+- · 本次发布主要是电脑端 1.1.8：修好了窗口底部按钮重叠、「查看日志」显示不全的问题
+
+**技术细节**
+- - 底部按钮行：TableLayoutPanel 行高改 AutoSize，`btnRow.WrapContents = true`（放不下时换行而不是互相压住）；窗口默认 `ClientSize 820×520`、`MinimumSize 520×380`
+- - 修 `本机 IP` 日志：原来 `Log.Write("  本机 IP：" + ip)` 拼的是 `Nic` 对象，打出 `AirMouse.MainForm+Nic`；改成 `ip.Ip + "（" + ip.Name + "）"`
+- - `pc/AssemblyInfo.cs` → 1.1.8.0
+
 ## 1.1.14 · 2026-11-08（电脑端 1.1.7）
 
 **用户可见**
