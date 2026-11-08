@@ -1,4 +1,4 @@
-// AirMouse 安装程序（单文件）
+﻿// AirMouse 安装程序（单文件）
 // 编译：csc /target:winexe /codepage:65001 /win32icon:pc\airmouse.ico /resource:dist\AirMouseServer.exe,payload_server /resource:dist\AirMouseHook.dll,payload_hook pc\Setup.cs
 // 说明：
 //  - 安装目录 %LOCALAPPDATA%\AirMouse（不需要管理员也能写，避免每次启动弹 UAC）
@@ -38,6 +38,26 @@ namespace AirMouseSetup
             return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), AppName);
         }
 
+        /// 上次装到哪：从「应用和功能」里的卸载项读 InstallLocation。
+        /// 更新时直接沿用它，用户不用再选一次目录（也不会出现 C 盘一份、D 盘一份）。
+        public static string PreviousDir()
+        {
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\AirMouse"))
+                {
+                    if (k == null) return null;
+                    string loc = k.GetValue("InstallLocation") as string;
+                    if (string.IsNullOrEmpty(loc)) return null;
+                    loc = loc.Trim().Trim('"').TrimEnd('\\');
+                    if (loc.Length <= 3) return null;              // 盘符根不算有效安装目录
+                    if (!Directory.Exists(loc)) return null;        // 目录被删了就回到默认
+                    return loc;
+                }
+            }
+            catch { return null; }
+        }
+
         public static string ServerExe { get { return Path.Combine(InstallDir, "AirMouseServer.exe"); } }
 
         /// 支持 /dir:"D:\Apps\AirMouse"、/dir=D:\Apps\AirMouse、/d "D:\Apps\AirMouse"
@@ -67,8 +87,32 @@ namespace AirMouseSetup
             bool uninstall = Build.Uninstaller || (args.Length > 0 && args[0].Equals("/uninstall", StringComparison.OrdinalIgnoreCase));
             bool silent = false;
             foreach (var a in args) if (a.Equals("/S", StringComparison.OrdinalIgnoreCase)) silent = true;
+
+            // 更新场景：沿用上次装的位置（注册表里的 InstallLocation），不用用户再选。
+            // 命令行 /dir 优先级最高，仍然可以显式覆盖。
+            if (!uninstall)
+            {
+                string prev = PreviousDir();
+                if (!string.IsNullOrEmpty(prev))
+                {
+                    InstallDir = prev;
+                    Trace("沿用上次安装位置：" + prev);
+                }
+            }
+
             string dirArg = PickDirArg(args);
             if (!string.IsNullOrEmpty(dirArg)) { try { InstallDir = InstallDirFrom(dirArg); } catch { } }
+
+            // 调试用：--printdir 只把「最终会用的安装目录」写进 setup-trace.log 然后退出。
+            // 不需要管理员，方便验证「更新时是否沿用了上次的位置」。
+            foreach (var a in args)
+            {
+                if (a.Equals("--printdir", StringComparison.OrdinalIgnoreCase))
+                {
+                    Trace("--printdir InstallDir=" + InstallDir + " previous=" + (PreviousDir() ?? "(none)"));
+                    return;
+                }
+            }
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -197,9 +241,16 @@ namespace AirMouseSetup
                 if (err != null) return "写出 AirMouseHook.dll 失败：" + err;
 
                 // 卸载器单独一份，装进安装目录（「应用和功能」和开始菜单都指向它）
-                string uninstExe = Path.Combine(InstallDir, "AirMouseUninstall.exe");
+                string uninstExe = Path.Combine(InstallDir, "uninstall.exe");
                 err = ExtractResource("payload_uninstall", uninstExe);
                 Trace("extract uninstaller -> " + (err ?? "ok"));
+                // 老版本叫 AirMouseUninstall.exe，升级时顺手清掉，别在目录里留两个卸载器
+                try
+                {
+                    string legacyUn = Path.Combine(InstallDir, "AirMouseUninstall.exe");
+                    if (File.Exists(legacyUn)) { File.Delete(legacyUn); Trace("removed legacy AirMouseUninstall.exe"); }
+                }
+                catch { }
 
                 // 快捷方式：开始菜单 + 桌面
                 string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "AirMouse 接收端.lnk");
@@ -291,9 +342,31 @@ namespace AirMouseSetup
                             Directory.Delete(dir, true);
                         else
                         {
-                            var cmd = new ProcessStartInfo("cmd.exe", "/c ping 127.0.0.1 -n 3 >nul & rmdir /s /q \"" + dir + "\"");
-                            cmd.UseShellExecute = false; cmd.CreateNoWindow = true;
+                            // 卸载器自己还在跑，Windows 不允许删除正在执行的 exe
+                            // → 生成一个小 .bat，由隐藏的 cmd 反复试删自己，删掉后再把整个目录删掉。
+                            // 最多重试 150 次 × 2 秒 = 5 分钟，足够用户看完「✓ 已卸载」窗口再关掉。
+                            // 用 .bat 而不是在命令行里拼 for /l，是为了绕开引号转义问题。
+                            string self = Application.ExecutablePath;
+                            string bat = Path.Combine(Path.GetTempPath(), "airmouse-uninstall-" + DateTime.Now.Ticks + ".bat");
+                            string script =
+                                "@echo off\r\n" +
+                                "for /l %%i in (1,1,150) do (\r\n" +
+                                "  del /f /q \"" + self + "\" >nul 2>&1\r\n" +
+                                "  if not exist \"" + self + "\" (\r\n" +
+                                "    rmdir /s /q \"" + dir + "\" >nul 2>&1\r\n" +
+                                "    del /f /q \"%~f0\" >nul 2>&1\r\n" +
+                                "    exit /b 0\r\n" +
+                                "  )\r\n" +
+                                "  ping 127.0.0.1 -n 2 >nul\r\n" +
+                                ")\r\n" +
+                                "rmdir /s /q \"" + dir + "\" >nul 2>&1\r\n";
+                            File.WriteAllText(bat, script, Encoding.Default);
+                            var cmd = new ProcessStartInfo("cmd.exe", "/c \"" + bat + "\"");
+                            cmd.UseShellExecute = false;
+                            cmd.CreateNoWindow = true;
+                            cmd.WindowStyle = ProcessWindowStyle.Hidden;
                             Process.Start(cmd);
+                            Trace("self-delete scheduled via " + bat);
                         }
                     }
                 }
@@ -350,7 +423,9 @@ namespace AirMouseSetup
             {
                 Text = Build.Uninstaller
                     ? "会删掉程序文件、开始菜单/桌面快捷方式、开机自启和「应用和功能」里的卸载项。"
-                    : "装一次就不用再右键「以管理员身份运行」了。安装位置可以改，不一定要在 C 盘。",
+                    : (Program.PreviousDir() != null
+                        ? "检测到已安装过：更新会直接覆盖原来的位置，不用重新选目录。"
+                        : "装一次就不用再右键「以管理员身份运行」了。安装位置可以改，不一定要在 C 盘。"),
                 Font = new Font("Microsoft YaHei UI", 9F),
                 ForeColor = Color.FromArgb(90, 100, 116),
                 AutoSize = true,

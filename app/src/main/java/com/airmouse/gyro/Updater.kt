@@ -118,9 +118,16 @@ object Updater {
             val guessed = ArrayList<String>()
             val lp = me.split(".")
             if (lp.size >= 2) {
-                val major = lp[0].toIntOrNull()
-                val minor = lp[1].toIntOrNull()
-                val patch = lp.getOrNull(2)?.toIntOrNull() ?: 0
+                // 版本名可能带测试后缀（1.1.10-test / 1.1.11-beta1），逐段只取前导数字，
+                // 否则 toIntOrNull() 全是 null，猜出来的 tag 会从 1.1.0 开始（实测踩过）。
+                fun seg(s: String?): Int? {
+                    if (s == null) return null
+                    val digits = s.takeWhile { it.isDigit() }
+                    return digits.toIntOrNull()
+                }
+                val major = seg(lp[0])
+                val minor = seg(lp[1])
+                val patch = seg(lp.getOrNull(2)) ?: 0
                 if (major != null && minor != null) {
                     // 往后猜 3 个（有新版本时最常用），再补上「当前版本本身」和往前 2 个：
                     // 这样「已经是最新」时也能拿到自己的清单，不会被 CDN 缓存里的旧版本骗到。

@@ -255,6 +255,14 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         if (intent?.getBooleanExtra("enable", false) == true) {
             main.postDelayed({ setEnabled(true, false) }, 300)
         }
+        // 调试用：--ez nobtauto true 不做「自动连回上次电脑」，用来观察 HID 就绪但未连接时的界面
+        if (intent?.getBooleanExtra("nobtauto", false) == true) {
+            autoConnectTried = true
+        }
+        // 调试用：--ez pick true 直接弹出蓝牙设备列表（MIUI 上 adb input tap 会被丢掉，点不开）
+        if (intent?.getBooleanExtra("pick", false) == true) {
+            main.postDelayed({ pickDevice() }, 1200)
+        }
 
         // 切主题/横竖屏会重建 Activity：把停用前开着的东西接回来（冷启动 savedInstanceState 为 null，仍是默认停用）
         if (savedInstanceState != null) {
@@ -507,6 +515,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         cancel: String? = "取消",
         extra: Pair<String, () -> Unit>? = null,
         onShown: ((BottomSheetDialog) -> Unit)? = null,
+        okBefore: (() -> Boolean)? = null,
         onOk: (() -> Unit)? = null
     ): BottomSheetDialog {
         val sheet = BottomSheetDialog(this)
@@ -527,6 +536,8 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         val okBtn = v.findViewById<Button>(R.id.dlgOk)
         okBtn.text = ok
         okBtn.setOnClickListener {
+            // okBefore 返回 false 就什么都不做（弹窗不关、也不触发 onOk），用来做「内容为空就别发」这类校验
+            if (okBefore != null && !okBefore()) return@setOnClickListener
             sheet.dismiss()
             onOk?.invoke()
         }
@@ -667,7 +678,13 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             net.stop()
             hid.start()
             statusTitle.text = "蓝牙 HID"
-            statusSub.text = "点这里选择/配对电脑"
+            // 这里必须写清楚「下一步点哪里」。HID 注册成功的那次回调可能在开关打开之前就发过了，
+            // 而 publish() 对「同样的状态+文案」会去重，所以别指望 READY 回调再来改这一行。
+            statusSub.text = if (hid.isConnected) {
+                "蓝牙 · 已连接"
+            } else {
+                "点这里选择电脑或配对新设备"
+            }
             setDot(COLOR_MID)
         } else if (mode == Prefs.MODE_USB) {
             hid.close()
@@ -919,7 +936,11 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                 HidInput.State.ERROR -> "出错了"
                 else -> "未连接"
             }
-            statusSub.text = decorateSub("蓝牙", message)
+            // 蓝牙 HID 就绪但还没连上时，「HID 就绪」这四个字等于什么都没说
+            // → 直接告诉用户下一步点哪里：点状态栏能选已配对的电脑，也能配新设备。
+            statusSub.text = if (state == HidInput.State.READY) {
+                "HID 就绪 · 点这里选择电脑或配对新设备"
+            } else decorateSub("蓝牙", message)
             setDot(
                 when (state) {
                     HidInput.State.CONNECTED -> COLOR_OK
@@ -1121,6 +1142,9 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
     private var keyboardOpen = false
     private var autoConnectTried = false
 
+    /** 蓝牙设备列表是否「显示全部」（默认只列电脑；耳机手表之类要手动展开） */
+    private var showAllBtDevices = false
+
     private fun updateGyroForKeyboard(showing: Boolean) {
         keyboardOpen = showing
     }
@@ -1151,15 +1175,46 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         } catch (e: SecurityException) {
             emptyList()
         }
+        // 列表只留「电脑」：① 连接过的（历史记录，最近的排最前）② 蓝牙设备类为电脑的。
+        // 耳机、手表、车机这些塞进来只会让人翻半天。真要是判断错了，底下还有「显示全部设备」。
+        val history = prefs.btHistoryList()
+        val computers = bonded.filter { d ->
+            history.contains(d.address) || isComputerDevice(d)
+        }.sortedWith(
+            compareBy<BluetoothDevice> { d ->
+                val i = history.indexOf(d.address)
+                if (i >= 0) i else Int.MAX_VALUE
+            }.thenBy { hid.safeName(it).lowercase() }
+        )
+        val hidden = (bonded.size - computers.size).coerceAtLeast(0)
+        val shown = if (showAllBtDevices || computers.isEmpty()) bonded else computers
+
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
         lateinit var sheet: BottomSheetDialog
-        for (d in bonded) {
+        if (shown.isEmpty()) {
+            col.addView(optionRow("还没配对过电脑，点下面「让电脑发现本机」") { sheet.dismiss() })
+        }
+        val others = hidden
+        for (d in shown) {
             val name = hid.safeName(d)
-            col.addView(optionRow("连接：$name") {
+            val recent = history.indexOf(d.address)
+            val label = when {
+                recent == 0 -> "最近用过：$name"
+                recent > 0 -> "用过：$name"
+                else -> "连接：$name"
+            }
+            col.addView(optionRow(label) {
                 sheet.dismiss()
-                prefs.lastAddress = d.address
+                prefs.rememberBt(d.address)
                 hid.connect(d)
+            })
+        }
+        if (others > 0 && !showAllBtDevices && computers.isNotEmpty()) {
+            col.addView(optionRow("显示全部蓝牙设备（还有 $others 个）") {
+                sheet.dismiss()
+                showAllBtDevices = true
+                pickDevice()
             })
         }
         col.addView(optionRow("让电脑发现本机（300 秒）") {
@@ -1171,6 +1226,14 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             openBluetoothSettings()
         })
         sheet = showSheet("蓝牙 HID", content = col, ok = "关掉", cancel = null)
+    }
+
+    /** 蓝牙设备类 major class = 0x0100 表示「电脑」，用来把耳机手表过滤掉 */
+    @SuppressLint("MissingPermission")
+    private fun isComputerDevice(d: BluetoothDevice): Boolean = try {
+        d.bluetoothClass?.majorDeviceClass == 0x0100
+    } catch (e: SecurityException) {
+        false
     }
 
     /**
@@ -1198,7 +1261,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                 }
             }
             ?: return
-        prefs.lastAddress = target.address
+        prefs.rememberBt(target.address)
         hid.connect(target)
     }
 
@@ -1253,15 +1316,25 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         input.maxLines = 6
         wrap.addView(input, LinearLayout.LayoutParams(-1, -2))
 
-        showSheet(
+        var sent = false
+        val sheet = showSheet(
             title = "手机输入法打字",
             content = wrap,
             ok = "发送",
+            okBefore = {
+                // 空内容不发：弹窗也留着，方便接着打字
+                val t = input.text.toString().trim()
+                if (t.isEmpty()) {
+                    toast("还没输入内容，先打几个字再点发送")
+                    false
+                } else true
+            },
             onOk = {
+                sent = true
                 sendComposedText(input.text.toString())
-                // 发完就把键盘收起来：这时人要回去看光标，键盘面板继续杵着只会挡着触摸板
-                hideKeyboardPanel()
-                updateGyroForKeyboard(false)
+                // 发完不收起面板，而是停在「手机输入法」页 —— 那里有 esc/tab/⌫/⏎ 四个快捷键，
+                // 发完通常紧接着要按回车或 Tab（以前这里是收起面板，回车还得重新点开）
+                keyboard.imeMode = true
             },
             onShown = { s ->
                 // 抽屉贴到窗口上之后再要软键盘才生效；光设 softInputMode 在部分 ROM 上不弹，补一次 showSoftInput
@@ -1276,6 +1349,28 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                 }, 260)
             }
         )
+        // 取消 / 点空白 / 返回键关掉弹窗（也就是没点「发送」）：直接把键盘面板收起来回到触摸板。
+        // 以前这种情况面板会留在「手机输入法」页、露出那四个快捷键，看着像跳到了直通键码页。
+        sheet.setOnDismissListener {
+            if (!sent) {
+                hideKeyboardPanel()
+                updateGyroForKeyboard(false)
+            }
+        }
+        // 调试用：HyperOS 会拦 adb 注入点击（INJECT_EVENTS），这里用开关替人点一下
+        //   --ez imedlg true --es imedlgact cancel  等价于点「取消」
+        //   --ez imedlgact empty                    点「发送」但输入框是空的
+        //   --ez imedlgact send                     先填一个 x 再点「发送」
+        when (intent?.getStringExtra("imedlgact")) {
+            "cancel" -> main.postDelayed({ sheet.dismiss() }, 1500)
+            "empty" -> main.postDelayed({
+                sheet.findViewById<android.widget.Button>(R.id.dlgOk)?.performClick()
+            }, 1500)
+            "send" -> main.postDelayed({
+                input.setText("x")
+                sheet.findViewById<android.widget.Button>(R.id.dlgOk)?.performClick()
+            }, 1500)
+        }
     }
 
     /** 把输入法打出来的一整段文字交给当前通道 */
@@ -1621,6 +1716,11 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         net.usbMode = false
         // 重置后别再把陀螺仪自动接回来
         gyroRestorePending = GYRO_OFF
+        // 重置后重新给一次「自动连回上次电脑」的机会，否则开关一次就再也不自动连了
+        autoConnectTried = false
+        // 忘掉上次那台电脑，重置后从「重新配对」开始
+        prefs.lastAddress = ""
+        prefs.btHistory = ""
 
         // 4) 界面回到初始
         seekSens.progress = 70

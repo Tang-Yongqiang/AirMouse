@@ -1,14 +1,14 @@
 {
     "proto":  1,
     "apk":  {
-                "versionCode":  69,
-                "versionName":  "1.1.10",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.10/AirMouse-1.1.10.apk"
+                "versionCode":  70,
+                "versionName":  "1.1.11",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.11/AirMouse-1.1.11.apk"
             },
     "server":  {
-                   "version":  "1.1.4",
-                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.4/AirMouseServer-v1.1.4.zip"
+                   "version":  "1.1.5",
+                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.5/AirMouseServer-v1.1.5.zip"
                },
-    "notes":  "· 全部重置现在会真正停掉连接：清空 IP/端口、关掉启用开关、连接方式回到蓝牙，不再一直重连\n· 重置后也不会再把陀螺仪自动接回来",
+    "notes":  "手机端 1.1.11：\n· 蓝牙设备列表只列电脑：用过的排最上面（耳机、手表不再混进来），底部可「显示全部蓝牙设备」\n· 蓝牙面板状态栏提示改为「点这里选择电脑或配对新设备」\n· 重置后不再自动连回旧电脑（忘掉上次那台）\n· 键盘面板：点取消/空白处收起整块面板，空内容只提示不发送，功能键顺序改为 Esc / Tab / 删除 / 回车\n\n电脑端 1.1.5：\n· 安装器更新时自动沿用上次的安装目录，不用重新选\n· 卸载器改名 uninstall.exe；卸载后自身与目录不再残留\n· 安装器新增 --printdir 排障参数",
     "publishedAt":  "2026-11-08"
 }

@@ -65,6 +65,27 @@ class Prefs(context: Context) {
         get() = sp.getString("lastDev", "") ?: ""
         set(v) = sp.edit().putString("lastDev", v).apply()
 
+    /**
+     * 连接过的电脑地址，最近用的排最前，用逗号分隔。
+     * 蓝牙设备列表靠它把「你的电脑」顶到最上面 —— 耳机、手表再也不会混在里面的。
+     */
+    var btHistory: String
+        get() = sp.getString("btHistory", "") ?: ""
+        set(v) = sp.edit().putString("btHistory", v).apply()
+
+    /** 按「最近用过」的顺序，最多留 8 台 */
+    fun btHistoryList(): List<String> =
+        btHistory.split(',').map { it.trim() }.filter { it.isNotEmpty() }.take(8)
+
+    fun rememberBt(address: String) {
+        if (address.isBlank()) return
+        val list = btHistoryList().toMutableList()
+        list.remove(address)
+        list.add(0, address)
+        btHistory = list.take(8).joinToString(",")
+        lastAddress = address
+    }
+
     var typingMode: Int
         get() = sp.getInt("typingMode", TYPE_IME)
         set(v) = sp.edit().putInt("typingMode", v).apply()

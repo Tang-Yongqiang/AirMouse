@@ -95,7 +95,7 @@ if (-not $copied) { Write-Host "[!] 接收端正在运行，沿用现有的 dist
 Remove-Item $exeTmp -Force -ErrorAction SilentlyContinue
 
 # 卸载器 + 安装器（安装器把 server / hook / 卸载器 三个都内嵌进去）
-$uninOut = Join-Path $root 'dist\AirMouseUninstall.exe'
+$uninOut = Join-Path $root 'dist\uninstall.exe'
 $setupOut = Join-Path $root 'dist\AirMouseSetup.exe'
 & $Csc /nologo /target:winexe /codepage:65001 /optimize+ /define:UNINSTALL_ONLY `
     /r:System.Windows.Forms.dll /r:System.Drawing.dll `
@@ -119,7 +119,7 @@ Copy-Item $apkOut (Join-Path $appRel "AirMouse-$AppVersion.apk") -Force
 Copy-Item $exeOut (Join-Path $srvRel 'AirMouseServer.exe') -Force
 Copy-Item $hookOut (Join-Path $srvRel 'AirMouseHook.dll') -Force
 Copy-Item $setupOut (Join-Path $srvRel 'AirMouseSetup.exe') -Force
-Copy-Item $uninOut (Join-Path $srvRel 'AirMouseUninstall.exe') -Force
+Copy-Item $uninOut (Join-Path $srvRel 'uninstall.exe') -Force
 $exeZip = Join-Path $srvRel "AirMouseServer-v$ServerVersion.zip"
 Remove-Item $exeZip -Force -ErrorAction SilentlyContinue
 $readmeSrc = Join-Path $root 'pc\使用说明（先看这个）.txt'

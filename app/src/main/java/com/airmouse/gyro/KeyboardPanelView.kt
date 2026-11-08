@@ -144,10 +144,11 @@ class KeyboardPanelView @JvmOverloads constructor(
 
         val quick = LinearLayout(context)
         quick.orientation = HORIZONTAL
-        quick.addView(keyView("回车") { sendKey(HidKeys.ENTER) }, keyLp())
-        quick.addView(keyView("⌫") { sendKey(HidKeys.BACKSPACE) }, keyLp())
-        quick.addView(keyView("Tab") { sendKey(HidKeys.TAB) }, keyLp())
+        // 顺序按「发送完最可能接着按哪个」排：先 Esc/Tab 这类控制键，删除居中，回车放最右（最好按）
         quick.addView(keyView("Esc") { sendKey(HidKeys.ESC) }, keyLp())
+        quick.addView(keyView("Tab") { sendKey(HidKeys.TAB) }, keyLp())
+        quick.addView(keyView("⌫") { sendKey(HidKeys.BACKSPACE) }, keyLp())
+        quick.addView(keyView("⏎") { sendKey(HidKeys.ENTER) }, keyLp())
         body.addView(quick, rowLp())
     }
 
