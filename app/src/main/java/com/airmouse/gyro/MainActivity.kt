@@ -753,11 +753,13 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
      */
     private fun updateNotesText(info: Updater.Info): String {
         val sb = StringBuilder()
-        info.notes?.let { sb.append(it) }
+        info.notes?.trim()?.let { if (it.isNotEmpty()) sb.append(it) }
         info.minServer?.let {
             if (sb.isNotEmpty()) sb.append("\n\n")
             sb.append("这一版需要电脑端 ").append(it).append(" 或更高（电脑端可在「检查更新」里升级）")
         }
+        // 万一这版没写说明，别弹出一片空白让用户以为坏了
+        if (sb.isEmpty()) sb.append("这一版没有写更新说明，直接装就行。")
         return sb.toString()
     }
 
