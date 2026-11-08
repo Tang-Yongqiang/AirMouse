@@ -195,9 +195,9 @@ if (-not $ServerOnly) {
 # 手里那份旧清单里的下载地址会 404 —— 这个固定路径给「手动分发 / 文档直链」兜底。
 $stableDir = Join-Path $root 'releases\stable'
 New-Item -ItemType Directory -Path $stableDir -Force | Out-Null
-Copy-Item $exeOut (Join-Path $stableDir 'AirMouseServer.exe') -Force
-Copy-Item $setupOut (Join-Path $stableDir 'AirMouseSetup.exe') -Force
-if (-not $ServerOnly) { Copy-Item $apkOut (Join-Path $stableDir 'AirMouse.apk') -Force }
+if ($exeOut -and (Test-Path $exeOut)) { Copy-Item $exeOut (Join-Path $stableDir 'AirMouseServer.exe') -Force }
+if ($setupOut -and (Test-Path $setupOut)) { Copy-Item $setupOut (Join-Path $stableDir 'AirMouseSetup.exe') -Force }
+if (-not $ServerOnly -and $apkOut -and (Test-Path $apkOut)) { Copy-Item $apkOut (Join-Path $stableDir 'AirMouse.apk') -Force }
 Write-Host "[3/7] $(if ($ServerOnly) { '电脑端' } else { 'APK' }) → releases\$(if ($ServerOnly) { "server-v$ServerVersion" } else { "app-v$AppVersion + server-v$ServerVersion" })" -ForegroundColor Cyan
 if (-not $ServerOnly) {
     Write-Host "      要发给别人的一个包：dist\AirMouse-$AppVersion-发送包.zip（$([math]::Round((Get-Item $sendZip).Length/1MB,2)) MB）" -ForegroundColor Cyan
