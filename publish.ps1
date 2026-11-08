@@ -13,6 +13,8 @@ param(
     [string]$ServerVersion = "",                          # 电脑端版本；留空=沿用 pc\AssemblyInfo.cs 里的现值
     [string]$Notes = "",                                  # 更新说明，\n 分隔
     [string]$NotesFile = "",                              # 更新说明写在这个 UTF-8 文件里（中文更保险，避免命令行编码问题）
+    [string]$TechNotes = "",                              # 技术细节：只写进仓库 CHANGELOG.md，不展示给普通用户
+    [string]$TechNotesFile = "",                          # 同上，从 UTF-8 文件读
     [string]$Repo = "Tang-Yongqiang/AirMouse",
     [int]$Proto = 1                                       # 协议版本，指令集变了才改
 )
@@ -23,6 +25,13 @@ if ($NotesFile) {
     $nf = (Resolve-Path $NotesFile).Path
     $Notes = ([IO.File]::ReadAllText($nf, [Text.Encoding]::UTF8)).Trim()
 }
+if ($TechNotesFile) {
+    $tf = (Resolve-Path $TechNotesFile).Path
+    $TechNotes = ([IO.File]::ReadAllText($tf, [Text.Encoding]::UTF8)).Trim()
+}
+# 允许在命令行里用字面 \n 分段（PowerShell 双引号里 `n 才是换行，容易写错）
+$Notes = $Notes -replace '\\n', "`n"
+$TechNotes = $TechNotes -replace '\\n', "`n"
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -174,6 +183,34 @@ Get-ChildItem $relRoot -Directory | Where-Object { $keep -notcontains $_.Name } 
 }
 [IO.File]::WriteAllText((Join-Path $root 'update.json'), $json + "`n", (New-Object Text.UTF8Encoding($false)))
 Write-Host "[4/7] update.json 已更新" -ForegroundColor Cyan
+
+# 4b) CHANGELOG.md：技术细节留在仓库里，不推给普通用户
+if ($TechNotes -or $Notes) {
+    $log = Join-Path $root 'CHANGELOG.md'
+    if (-not (Test-Path $log)) {
+        [IO.File]::WriteAllText($log, "# 更新记录`n`n> 给开发/维护看的技术记录。普通用户看到的说明在 update.json 的 notes 里。`n", (New-Object Text.UTF8Encoding($false)))
+    }
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.AppendLine("## " + $AppVersion + " · " + (Get-Date -Format 'yyyy-MM-dd') + "（电脑端 " + $ServerVersion + "）")
+    [void]$sb.AppendLine()
+    if ($Notes) {
+        [void]$sb.AppendLine("**用户可见**")
+        foreach ($line in ($Notes -split "`n")) { if ($line.Trim()) { [void]$sb.AppendLine("- " + $line.Trim()) } }
+        [void]$sb.AppendLine()
+    }
+    if ($TechNotes) {
+        [void]$sb.AppendLine("**技术细节**")
+        foreach ($line in ($TechNotes -split "`n")) { if ($line.Trim()) { [void]$sb.AppendLine("- " + $line.Trim()) } }
+        [void]$sb.AppendLine()
+    }
+    $old = [IO.File]::ReadAllText($log, [Text.Encoding]::UTF8)
+    # 新条目插在最前面的「# 更新记录」说明块之后
+    $idx = $old.IndexOf("`n## ")
+    if ($idx -lt 0) { $new = $old.TrimEnd() + "`n`n" + $sb.ToString() }
+    else { $new = $old.Substring(0, $idx + 1) + $sb.ToString() + $old.Substring($idx + 1) }
+    [IO.File]::WriteAllText($log, $new, (New-Object Text.UTF8Encoding($false)))
+    Write-Host "[4b] CHANGELOG.md 已追加" -ForegroundColor Cyan
+}
 
 # 5) 提交
 & git add -A

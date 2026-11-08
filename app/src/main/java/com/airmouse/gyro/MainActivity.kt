@@ -173,6 +173,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         requestBluetoothPermissions()
         applyMode()
         applyDebugConfig(intent)
+        checkUpdateOnLaunch()
 
         // 调试用：adb 里 am start ... --ez gyro true --ez gyrolog true 可免点击开启陀螺仪并打点
         gyro.debugLogging = intent?.getBooleanExtra("gyrolog", false) == true
@@ -717,6 +718,34 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
      * 总开关。关闭时会把蓝牙 HID 连接断开、网络停掉，
      * 电脑上就看不到这只手机鼠标了 —— 不会再和真鼠标抢指针。
      */
+    /**
+     * 每次打开 App 自检一次更新：有新版本才弹，同一版本只弹一次。
+     * 弹过的那版记进 prefs.updateSkipVersion，下次启动不再重复骚扰
+     * （用户想手动查还是点设置里的「检查更新」）。
+     */
+    private fun checkUpdateOnLaunch() {
+        main.postDelayed({
+            Updater.checkOnLaunch(this) { r ->
+                if (isFinishing || isDestroyed) return@checkOnLaunch
+                val info = r.info ?: return@checkOnLaunch
+                if (info.versionCode.toLong() <= currentVersionCode()) return@checkOnLaunch
+                if (info.versionName == prefs.updateSkipVersion) return@checkOnLaunch
+                prefs.updateSkipVersion = info.versionName
+                Diag.log("UPD", "启动自检发现新版本 " + info.versionName)
+                showSheet(
+                    "发现新版本 " + info.versionName,
+                    buildString {
+                        append("你现在是 ").append(versionLabel()).append("\n\n")
+                        info.notes?.let { append(it) }
+                    },
+                    ok = "去下载",
+                    cancel = "以后再说",
+                    onOk = { startApkDownload(info) }
+                )
+            }
+        }, 1500)
+    }
+
     /** 键盘面板是浮层：调用方只管说要开还是要关，遮罩和可见性一起管 */
     private fun showKeyboardPanel() {
         kbScrim.visibility = View.VISIBLE

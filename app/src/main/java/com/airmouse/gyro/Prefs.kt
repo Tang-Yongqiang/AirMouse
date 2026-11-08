@@ -65,6 +65,11 @@ class Prefs(context: Context) {
         get() = sp.getString("lastDev", "") ?: ""
         set(v) = sp.edit().putString("lastDev", v).apply()
 
+    /** 已经「以后再说」过的新版本号：同一版不再每次启动都弹 */
+    var updateSkipVersion: String
+        get() = sp.getString("updateSkipVersion", "") ?: ""
+        set(v) = sp.edit().putString("updateSkipVersion", v).apply()
+
     /**
      * 连接过的电脑地址，最近用的排最前，用逗号分隔。
      * 蓝牙设备列表靠它把「你的电脑」顶到最上面 —— 耳机、手表再也不会混在里面的。

@@ -56,6 +56,19 @@ object Updater {
 
     private const val PREF_LAST_CHECK = "updateLastCheck"
 
+    /**
+     * 启动自检：**每次打开 App 都查一次**。
+     * 只挡掉 60 秒内的重复（切主题/横竖屏会重建 Activity，别连着查两遍）。
+     * 查完由调用方决定怎么提示 —— 首次启动发现新版会弹一次，同一次运行里不再重复弹。
+     */
+    fun checkOnLaunch(ctx: Context, onResult: (Result) -> Unit) {
+        val prefs = ctx.getSharedPreferences("airmouse", Context.MODE_PRIVATE)
+        val last = prefs.getLong(PREF_LAST_CHECK, 0L)
+        if (System.currentTimeMillis() - last < 60_000L) return
+        prefs.edit().putLong(PREF_LAST_CHECK, System.currentTimeMillis()).apply()
+        check(ctx, onResult)
+    }
+
     /** 自动检查：24 小时最多一次（手动检查走 [checkNow]） */
     fun checkQuietly(ctx: Context, onResult: (Result) -> Unit) {
         val prefs = ctx.getSharedPreferences("airmouse", Context.MODE_PRIVATE)

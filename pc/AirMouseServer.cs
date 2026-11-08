@@ -498,7 +498,34 @@ namespace AirMouse
             }
             return -1;
         }
-        private void StartUpdateCheck()
+        /// <summary>
+        /// 手动检查更新的结果回显：借顶部那条链接位置显示一行结果，8 秒后自动收起。
+        /// （没有新版本时也必须有反应，否则用户以为按钮坏了。）
+        /// </summary>
+        private void ShowCheckResult(string text)
+        {
+            try
+            {
+                _updateLink.Text = text;
+                _updateLink.Visible = true;
+                Log.Write("[i] " + text);
+                var t = new System.Windows.Forms.Timer();
+                t.Interval = 8000;
+                t.Tick += (s, e) =>
+                {
+                    t.Stop(); t.Dispose();
+                    try
+                    {
+                        if (_updateLink.Text == text) _updateLink.Visible = false;
+                    }
+                    catch { }
+                };
+                t.Start();
+            }
+            catch { }
+        }
+
+        private void StartUpdateCheck(bool manual = false, Action onDone = null)
         {
             var t = new Thread(() =>
             {
@@ -625,8 +652,17 @@ namespace AirMouse
                     if (string.IsNullOrEmpty(name) && map.TryGetValue("versionName", out v) && v != null) name = v.ToString();
                     if (string.IsNullOrEmpty(exe) && map.TryGetValue("exe", out v) && v != null) exe = v.ToString();
                     string notes = map.TryGetValue("notes", out v) && v != null ? v.ToString() : "";
-                    if (string.IsNullOrEmpty(name)) return;
-                    if (!IsNewer(name)) return;
+                    if (string.IsNullOrEmpty(name))
+                    {
+                        if (manual) ShowCheckResult("检查更新失败：清单里没有版本号");
+                        return;
+                    }
+                    if (!IsNewer(name))
+                    {
+                        if (manual) ShowCheckResult("已是最新版本 " + CurrentVersion());
+                        else Log.Write("[i] 已是最新版本 " + CurrentVersion());
+                        return;
+                    }
 
                     _updateUrl = exe;
                     BeginInvoke((Action)(() =>
@@ -640,6 +676,14 @@ namespace AirMouse
                 catch (Exception ex)
                 {
                     Log.Write("[i] 检查更新失败（不影响使用）：" + ex.Message);
+                    if (manual) ShowCheckResult("检查更新失败：" + ex.Message);
+                }
+                finally
+                {
+                    if (onDone != null)
+                    {
+                        try { BeginInvoke(onDone); } catch { }
+                    }
                 }
             });
             t.IsBackground = true;
@@ -832,6 +876,22 @@ namespace AirMouse
                 }
             };
 
+            // 手动检查更新：不等到有新版本才显示，随时可点
+            var checkUpd = new Button();
+            checkUpd.Text = "检查更新";
+            checkUpd.AutoSize = true;
+            checkUpd.Padding = new Padding(8, 2, 8, 2);
+            checkUpd.Click += (s, e) =>
+            {
+                checkUpd.Enabled = false;
+                _updateLink.Text = "正在检查更新…";
+                _updateLink.Visible = true;
+                StartUpdateCheck(true, () =>
+                {
+                    checkUpd.Enabled = true;
+                });
+            };
+
             var openLog = new Button();
             openLog.Text = "查看日志";
             openLog.AutoSize = true;
@@ -877,6 +937,7 @@ namespace AirMouse
             btnRow.Controls.Add(quit);
             btnRow.Controls.Add(copy);
             btnRow.Controls.Add(fw);
+            btnRow.Controls.Add(checkUpd);
             btnRow.Controls.Add(openLog);
 
             // 底部一条：左边勾选框、右边按钮组。用 TableLayoutPanel 分两列，
