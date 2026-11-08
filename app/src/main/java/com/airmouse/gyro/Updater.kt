@@ -47,7 +47,10 @@ object Updater {
         val versionName: String,
         val apkUrl: String?,
         val exeUrl: String?,
-        val notes: String?
+        /** 只放手机端的更新说明；电脑端内容在清单 server.notes 里，由电脑端自己显示 */
+        val notes: String?,
+        /** 这一版要求的最低电脑端版本（清单 server.minForApk）；没写就是不限制 */
+        val minServer: String? = null
     )
 
     data class Result(val info: Info?, val error: String?) {
@@ -218,15 +221,16 @@ object Updater {
 
     private fun parse(json: String): Info {
         val o = JSONObject(json)
+        val apk = o.optJSONObject("apk")
+        val srv = o.optJSONObject("server")
         val info = Info(
-            versionCode = o.optJSONObject("apk")?.optInt("versionCode", 0) ?: o.optInt("versionCode", 0),
-            versionName = o.optJSONObject("apk")?.optString("versionName", "")?.ifEmpty { null }
-                ?: o.optString("versionName", ""),
-            apkUrl = o.optJSONObject("apk")?.optString("url", "")?.ifEmpty { null }
-                ?: o.optString("apk").ifEmpty { null },
-            exeUrl = o.optJSONObject("server")?.optString("url", "")?.ifEmpty { null }
-                ?: o.optString("exe").ifEmpty { null },
-            notes = o.optString("notes").ifEmpty { null }
+            versionCode = apk?.optInt("versionCode", 0) ?: o.optInt("versionCode", 0),
+            versionName = apk?.optString("versionName", "")?.ifEmpty { null } ?: o.optString("versionName", ""),
+            apkUrl = apk?.optString("url", "")?.ifEmpty { null } ?: o.optString("apk").ifEmpty { null },
+            exeUrl = srv?.optString("url", "")?.ifEmpty { null } ?: o.optString("exe").ifEmpty { null },
+            // 说明只取手机端那段（旧的顶层 notes 兼容一下）
+            notes = apk?.optString("notes", "")?.ifEmpty { null } ?: o.optString("notes").ifEmpty { null },
+            minServer = srv?.optString("minForApk", "")?.ifEmpty { null }
         )
         if (info.versionCode <= 0) throw RuntimeException("update.json 里没有 versionCode")
         return info

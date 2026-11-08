@@ -736,7 +736,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                     "发现新版本 " + info.versionName,
                     buildString {
                         append("你现在是 ").append(versionLabel()).append("\n\n")
-                        info.notes?.let { append(it) }
+                        append(updateNotesText(info))
                     },
                     ok = "去下载",
                     cancel = "以后再说",
@@ -744,6 +744,21 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                 )
             }
         }, 1500)
+    }
+
+    /**
+     * 更新说明 + （可选）电脑端版本要求。
+     * 说明只放手机端内容；清单里真有硬性依赖时才补一行「电脑端需要 ≥ X」，
+     * 普通用户看到的就是这两三行，没有技术细节。
+     */
+    private fun updateNotesText(info: Updater.Info): String {
+        val sb = StringBuilder()
+        info.notes?.let { sb.append(it) }
+        info.minServer?.let {
+            if (sb.isNotEmpty()) sb.append("\n\n")
+            sb.append("这一版需要电脑端 ").append(it).append(" 或更高（电脑端可在「检查更新」里升级）")
+        }
+        return sb.toString()
     }
 
     /** 键盘面板是浮层：调用方只管说要开还是要关，遮罩和可见性一起管 */
@@ -1587,7 +1602,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                         "发现新版本 " + info.versionName,
                         buildString {
                             append("你现在是 ").append(versionLabel()).append("\n\n")
-                            info.notes?.let { append(it) }
+                            append(updateNotesText(info))
                         },
                         ok = "去下载",
                         cancel = "以后再说",

@@ -640,6 +640,7 @@ namespace AirMouse
                     // 电脑端只认 server 这一段；老清单只有顶层 versionName/exe，兼容一下
                     string name = "";
                     string exe = "";
+                    string srvNotes = "";
                     if (map.TryGetValue("server", out v) && v != null)
                     {
                         var srv = v as Dictionary<string, object>;
@@ -647,11 +648,14 @@ namespace AirMouse
                         {
                             if (srv.TryGetValue("version", out v) && v != null) name = v.ToString();
                             if (srv.TryGetValue("url", out v) && v != null) exe = v.ToString();
+                            if (srv.TryGetValue("notes", out v) && v != null) srvNotes = v.ToString();
                         }
                     }
                     if (string.IsNullOrEmpty(name) && map.TryGetValue("versionName", out v) && v != null) name = v.ToString();
                     if (string.IsNullOrEmpty(exe) && map.TryGetValue("exe", out v) && v != null) exe = v.ToString();
                     string notes = map.TryGetValue("notes", out v) && v != null ? v.ToString() : "";
+                    // 电脑端优先用清单里 server.notes（只讲电脑端的事），旧的顶层 notes 兜底
+                    if (!string.IsNullOrEmpty(srvNotes)) notes = srvNotes;
                     if (string.IsNullOrEmpty(name))
                     {
                         if (manual) ShowCheckResult("检查更新失败：清单里没有版本号");

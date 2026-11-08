@@ -11,8 +11,11 @@
 param(
     [Parameter(Mandatory = $true)][string]$AppVersion,   # 手机端版本，例如 1.1.0
     [string]$ServerVersion = "",                          # 电脑端版本；留空=沿用 pc\AssemblyInfo.cs 里的现值
-    [string]$Notes = "",                                  # 更新说明，\n 分隔
-    [string]$NotesFile = "",                              # 更新说明写在这个 UTF-8 文件里（中文更保险，避免命令行编码问题）
+    [string]$Notes = "",                                  # 手机端的更新说明（电脑端内容请用 -ServerNotesFile）
+    [string]$NotesFile = "",                              # 手机端更新说明写在 UTF-8 文件里（中文更保险）
+    [string]$ServerNotes = "",                            # 电脑端的更新说明：只在电脑端「发现新版本」时显示
+    [string]$ServerNotesFile = "",                        # 同上，从 UTF-8 文件读
+    [string]$MinServer = "",                              # 这一版手机端要求的最低电脑端版本，空=不限制
     [string]$TechNotes = "",                              # 技术细节：只写进仓库 CHANGELOG.md，不展示给普通用户
     [string]$TechNotesFile = "",                          # 同上，从 UTF-8 文件读
     [string]$Repo = "Tang-Yongqiang/AirMouse",
@@ -29,8 +32,13 @@ if ($TechNotesFile) {
     $tf = (Resolve-Path $TechNotesFile).Path
     $TechNotes = ([IO.File]::ReadAllText($tf, [Text.Encoding]::UTF8)).Trim()
 }
+if ($ServerNotesFile) {
+    $sf = (Resolve-Path $ServerNotesFile).Path
+    $ServerNotes = ([IO.File]::ReadAllText($sf, [Text.Encoding]::UTF8)).Trim()
+}
 # 允许在命令行里用字面 \n 分段（PowerShell 双引号里 `n 才是换行，容易写错）
 $Notes = $Notes -replace '\\n', "`n"
+$ServerNotes = $ServerNotes -replace '\\n', "`n"
 $TechNotes = $TechNotes -replace '\\n', "`n"
 
 $ErrorActionPreference = 'Stop'
@@ -157,12 +165,14 @@ $manifest = [ordered]@{
         versionCode = $code
         versionName = $AppVersion
         url = "https://cdn.jsdelivr.net/gh/$Repo@main/releases/app-v$AppVersion/AirMouse-$AppVersion.apk"
+        notes = $Notes
     }
     server = [ordered]@{
         version = $ServerVersion
         url = "https://cdn.jsdelivr.net/gh/$Repo@main/releases/server-v$ServerVersion/AirMouseServer-v$ServerVersion.zip"
+        notes = $ServerNotes
+        minForApk = $MinServer
     }
-    notes = $Notes
     publishedAt = (Get-Date -Format 'yyyy-MM-dd')
 }
 $json = $manifest | ConvertTo-Json -Depth 6

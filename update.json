@@ -3,12 +3,14 @@
     "apk":  {
                 "versionCode":  70,
                 "versionName":  "1.1.11",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.11/AirMouse-1.1.11.apk"
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.11/AirMouse-1.1.11.apk",
+                "notes":  "每次打开 App 会自动检查更新，发现新版本可直接在 App 里下载安装\n蓝牙列表只显示电脑，最近连过的排最上面\n蓝牙面板会提示「点这里选择电脑或配对新设备」\n全部重置会清掉上次连接的电脑，不会再自动连回去\n键盘面板：取消或点空白处可收起；没输入内容会提示"
             },
     "server":  {
                    "version":  "1.1.5",
-                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.5/AirMouseServer-v1.1.5.zip"
+                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.5/AirMouseServer-v1.1.5.zip",
+                   "notes":  "电脑端新增「检查更新」按钮，随时可查，并会显示「已是最新版本」\n检查到新版本会下载安装包并自动启动安装程序\n安装器升级时自动沿用上次的安装目录",
+                   "minForApk":  ""
                },
-    "notes":  "蓝牙列表只显示电脑，最近连过的排最上面\n蓝牙面板会提示「点这里选择电脑或配对新设备」\n全部重置会清掉上次连接的电脑，不会再自动连回去\n键盘面板：取消或点空白处可收起；没输入内容会提示\n电脑端安装器升级时自动沿用上次的安装目录\n电脑端卸载更干净，不再残留卸载程序\n两端每次打开都会自动检查更新；电脑端新增「检查更新」按钮",
     "publishedAt":  "2026-11-08"
 }
