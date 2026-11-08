@@ -229,6 +229,12 @@ $apkBlock = if ($ServerOnly) {
 
 $manifest = [ordered]@{
     proto = $Proto
+    # 兼容老客户端：1.1.2 及更早只看顶层 versionCode/versionName/url/exe。
+    # 少了这几个字段，老版本点「检查更新」会一直显示「已是最新」。
+    versionCode = [int]$apkBlock.versionCode
+    versionName = [string]$apkBlock.versionName
+    url = [string]$apkBlock.url
+    exe = "https://cdn.jsdelivr.net/gh/$Repo@main/releases/server-v$ServerVersion/AirMouseServer-v$ServerVersion.zip"
     apk = $apkBlock
     server = [ordered]@{
         version = $ServerVersion

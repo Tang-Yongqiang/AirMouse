@@ -1,5 +1,9 @@
 {
     "proto":  1,
+    "versionCode":  75,
+    "versionName":  "1.1.16",
+    "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.16/AirMouse-1.1.16.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.9/AirMouseServer-v1.1.9.zip",
     "apk":  {
                 "versionCode":  75,
                 "versionName":  "1.1.16",
