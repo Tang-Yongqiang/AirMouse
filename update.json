@@ -1,14 +1,14 @@
 {
     "proto":  1,
     "apk":  {
-                "versionCode":  68,
-                "versionName":  "1.1.9",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.9/AirMouse-1.1.9.apk"
+                "versionCode":  69,
+                "versionName":  "1.1.10",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.10/AirMouse-1.1.10.apk"
             },
     "server":  {
                    "version":  "1.1.4",
                    "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.4/AirMouseServer-v1.1.4.zip"
                },
-    "notes":  "· WiFi 模式：把电脑窗口里那串 IP 整段粘进来即可，会按顺序自动挨个试\n· 粘贴时会自动滤掉端口号等无关文字\n· 电脑端「复制 IP」只复制首选地址",
+    "notes":  "· 全部重置现在会真正停掉连接：清空 IP/端口、关掉启用开关、连接方式回到蓝牙，不再一直重连\n· 重置后也不会再把陀螺仪自动接回来",
     "publishedAt":  "2026-11-08"
 }

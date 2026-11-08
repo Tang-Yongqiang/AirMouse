@@ -202,6 +202,10 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             main.postDelayed({ showImeDialog() }, 900)
         }
         // 调试用：--ez diag true 直接打开诊断日志抽屉
+        // 调试用：--ez reset true 直接执行一次「全部重置」（不弹确认框）
+        if (intent?.getBooleanExtra("reset", false) == true) {
+            main.postDelayed({ doReset() }, 900)
+        }
         if (intent?.getBooleanExtra("updatecheck", false) == true) {
             main.postDelayed({ showSettings(); main.postDelayed({ checkUpdateForDebug() }, 700) }, 500)
         }
@@ -1587,21 +1591,44 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
     private fun confirmReset() {
         showSheet(
             title = "全部重置",
-            message = "会清掉电脑 IP、灵敏度、滚轮惯性、打字方式等全部偏好，应用本身不会被卸载。",
+            message = "会清掉电脑 IP、灵敏度、滚轮惯性、打字方式等全部偏好，" +
+                "连接方式回到「蓝牙」，并关掉顶部的启用开关（不再自动重连）。应用本身不会被卸载。",
             ok = "重置",
-            onOk = {
-                prefs.host = ""
-                prefs.port = NetInput.DEFAULT_PORT
-                prefs.sensitivity = 1f
-                prefs.flingLevel = Prefs.FLING_MID
-                prefs.typingMode = Prefs.TYPE_KEYS
-                seekSens.progress = 70
-                keyboard.imeMode = false
-                applyFlingSetting()
-                paintSensLabel()
-                toast("已重置")
-            }
+            onOk = { doReset() }
         )
+    }
+
+    /** 真正执行重置：停掉连接 → 清偏好 → 同步内存态 → 界面复位 */
+    private fun doReset() {
+        // 1) 先彻底停掉：否则内存里还留着旧地址，重置完会继续重连
+        setEnabled(false, false)
+        net.stop()
+        hid.close()
+
+        // 2) 清偏好
+        prefs.host = ""
+        prefs.port = NetInput.DEFAULT_PORT
+        prefs.mode = Prefs.MODE_BT
+        prefs.sensitivity = 1f
+        prefs.flingLevel = Prefs.FLING_MID
+        prefs.typingMode = Prefs.TYPE_KEYS
+
+        // 3) 同步内存里那份连接参数
+        mode = Prefs.MODE_BT
+        net.host = ""
+        net.hosts = emptyList()
+        net.port = NetInput.DEFAULT_PORT
+        net.usbMode = false
+        // 重置后别再把陀螺仪自动接回来
+        gyroRestorePending = GYRO_OFF
+
+        // 4) 界面回到初始
+        seekSens.progress = 70
+        keyboard.imeMode = false
+        applyFlingSetting()
+        paintSensLabel()
+        applyMode()
+        toast("已重置：IP 已清空，连接方式回到蓝牙")
     }
 
     private fun flingHint(level: Int): String = when (level) {
