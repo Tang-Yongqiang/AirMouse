@@ -1,4 +1,4 @@
-﻿# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
+# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
 #
 # 用法（在仓库根目录）：
 #   .\publish.ps1 -AppVersion 1.1.0 -Notes "新增：…`n修复：…"
@@ -267,7 +267,8 @@ foreach ($prefix in @('app-v', 'server-v')) {
         Sort-Object { [version]($_.Name.Substring($prefix.Length)) } -Descending |
         Select-Object -First 3 | ForEach-Object { $_.Name })
 }
-Get-ChildItem $relRoot -Directory | Where-Object { $keep -notcontains $_.Name } | ForEach-Object {
+# stable 是固定路径兜底，永远保留（它不匹配 app-v*/server-v* 前缀，上面算 $keep 时不会被收进来）
+Get-ChildItem $relRoot -Directory | Where-Object { $keep -notcontains $_.Name -and $_.Name -ne 'stable' } | ForEach-Object {
     Write-Host "[3b] 清理旧版本目录 $($_.Name)" -ForegroundColor DarkGray
     # --ignore-unmatch：还没被 git 跟踪的目录直接删就行，不然 git rm 会 fatal
     & git -C $root rm -r --quiet --ignore-unmatch "releases/$($_.Name)"
