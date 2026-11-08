@@ -1,4 +1,4 @@
-﻿# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
+# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
 #
 # 用法（在仓库根目录）：
 #   .\publish.ps1 -AppVersion 1.1.0 -Notes "新增：…`n修复：…"
@@ -12,9 +12,17 @@ param(
     [Parameter(Mandatory = $true)][string]$AppVersion,   # 手机端版本，例如 1.1.0
     [string]$ServerVersion = "",                          # 电脑端版本；留空=沿用 pc\AssemblyInfo.cs 里的现值
     [string]$Notes = "",                                  # 更新说明，\n 分隔
+    [string]$NotesFile = "",                              # 更新说明写在这个 UTF-8 文件里（中文更保险，避免命令行编码问题）
     [string]$Repo = "Tang-Yongqiang/AirMouse",
     [int]$Proto = 1                                       # 协议版本，指令集变了才改
 )
+
+# 中文更新说明走命令行时，某些 shell 会把 UTF-8 当成 GBK 传进来（写进 update.json 就成了「鎵嬫満绔?」）。
+# 所以支持 -NotesFile：直接读一个 UTF-8 文本文件，绕开命令行编码。
+if ($NotesFile) {
+    $nf = (Resolve-Path $NotesFile).Path
+    $Notes = ([IO.File]::ReadAllText($nf, [Text.Encoding]::UTF8)).Trim()
+}
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -150,15 +158,19 @@ $manifest = [ordered]@{
 }
 $json = $manifest | ConvertTo-Json -Depth 6
 # 剪枝：手机端/电脑端各只留最近 3 个目录（jsDelivr 对超过 50 MB 的仓库直接拒绝服务）
+# 注意：不能按字符串降序排 —— "app-v1.1.9" 会排在 "app-v1.1.11" 前面，把刚发的那版删掉。
 $relRoot = Join-Path $root 'releases'
 $keep = @()
 foreach ($prefix in @('app-v', 'server-v')) {
     $keep += @(Get-ChildItem $relRoot -Directory | Where-Object { $_.Name -like "$prefix*" } |
-        Sort-Object Name -Descending | Select-Object -First 3 | ForEach-Object { $_.Name })
+        Sort-Object { [version]($_.Name.Substring($prefix.Length)) } -Descending |
+        Select-Object -First 3 | ForEach-Object { $_.Name })
 }
 Get-ChildItem $relRoot -Directory | Where-Object { $keep -notcontains $_.Name } | ForEach-Object {
     Write-Host "[3b] 清理旧版本目录 $($_.Name)" -ForegroundColor DarkGray
-    & git -C $root rm -r --quiet "releases/$($_.Name)"
+    # --ignore-unmatch：还没被 git 跟踪的目录直接删就行，不然 git rm 会 fatal
+    & git -C $root rm -r --quiet --ignore-unmatch "releases/$($_.Name)"
+    Remove-Item (Join-Path $relRoot $_.Name) -Recurse -Force -ErrorAction SilentlyContinue
 }
 [IO.File]::WriteAllText((Join-Path $root 'update.json'), $json + "`n", (New-Object Text.UTF8Encoding($false)))
 Write-Host "[4/7] update.json 已更新" -ForegroundColor Cyan
