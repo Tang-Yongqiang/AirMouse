@@ -891,18 +891,7 @@ namespace AirMouse
             _updateLink.Padding = new Padding(16, 0, 16, 0);
             _updateLink.TextAlign = ContentAlignment.MiddleLeft;
             _updateLink.Visible = false;
-            _updateLink.LinkClicked += (s, e) =>
-            {
-                try
-                {
-                    Process.Start(new ProcessStartInfo(_updateUrl) { UseShellExecute = true });
-                }
-                catch
-                {
-                    Clipboard.SetText(_updateUrl);
-                    Log.Write("[i] 打不开浏览器，下载地址已复制到剪贴板");
-                }
-            };
+            _updateLink.LinkClicked += (s, e) => UpdateClicked();
 
             Controls.Add(_log);
             Controls.Add(bottom);
@@ -918,6 +907,211 @@ namespace AirMouse
                 StartUpdateCheck();
             };
             FormClosing += OnClosing;
+
+            // 排障用：--update-url=<zip 地址> 直接把「一键更新」的链接摆出来，
+            // 不用等真的有新版本（也方便在没发版的机器上验证下载/解压/拉安装器这段）。
+            if (!string.IsNullOrEmpty(DebugUpdateUrl))
+            {
+                _updateUrl = DebugUpdateUrl;
+                _updateLink.Text = "【测试】发现新版本 → 点这里一键更新（当前 " + CurrentVersion() + "）";
+                _updateLink.Visible = true;
+                if (AutoUpdateOnLoad)
+                {
+                    Log.Write("[i] --oneclick：启动后自动执行一次一键更新");
+                    Load += (s2, e2) => BeginInvoke((Action)(() => UpdateClicked()));
+                }
+            }
+        }
+
+        // ------------------------------------------------------------ 一键更新
+        // 点链接不再「打开浏览器让用户自己找 zip」，而是自己下、自己解压、自己拉起安装器。
+        // 以前的坑：链接打开浏览器后一行反馈都没有，用户以为没生效就反复点，
+        // 结果 Downloads 里堆了好几个同名 zip。
+
+        private bool _updating;
+
+        /// <summary>排障用：--update-url=… 时强制把这一行链接显示出来（不影响正式逻辑）。</summary>
+        public static string DebugUpdateUrl;
+
+        /// <summary>排障用：--oneclick=… 时启动后立刻走一遍「一键更新」，不用手点。</summary>
+        public static bool AutoUpdateOnLoad;
+
+        /// <summary>排障用：--oneclick-dry=… 只下载+解压，不真的拉起安装器（避免弹 UAC）。</summary>
+        public static bool UpdateDryRun;
+
+        private void UpdateClicked()
+        {
+            if (_updating) return;
+            var url = _updateUrl;
+            if (string.IsNullOrEmpty(url)) return;
+
+            // 不是 zip（例如清单给的是网页）就还是交给浏览器
+            if (!url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                OpenUpdateInBrowser(url);
+                return;
+            }
+
+            _updating = true;
+            _updateLink.Enabled = false;
+            _updateLink.Text = "正在下载更新…";
+            Log.Write("[i] 一键更新：开始下载 " + url);
+
+            var th = new Thread(() =>
+            {
+                try
+                {
+                    DoOneClickUpdate(url);
+                }
+                catch (Exception ex)
+                {
+                    Log.Write("[!] 一键更新失败：" + ex.Message);
+                    Log.Write("    可以点右键把地址复制下来手动下载。");
+                    BeginInvoke((Action)(() =>
+                    {
+                        _updating = false;
+                        _updateLink.Enabled = true;
+                        _updateLink.Text = "更新失败，点这里重试（失败原因见日志）";
+                    }));
+                }
+            });
+            th.IsBackground = true;
+            th.Start();
+        }
+
+        private void OpenUpdateInBrowser(string url)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch
+            {
+                Clipboard.SetText(url);
+                Log.Write("[i] 打不开浏览器，下载地址已复制到剪贴板：" + url);
+            }
+        }
+
+        private void DoOneClickUpdate(string url)
+        {
+            var dir = PrepareUpdateDir();
+            Log.Write("[i] 一键更新：临时目录 " + dir);
+
+            var zip = Path.Combine(dir, "update.zip");
+            DownloadToFile(url, zip, pct =>
+            {
+                BeginInvoke((Action)(() =>
+                {
+                    _updateLink.Text = "正在下载更新… " + pct + "%";
+                }));
+            });
+            Log.Write("[i] 一键更新：已下载 " + new FileInfo(zip).Length + " 字节");
+
+            var outDir = Path.Combine(dir, "x");
+            Directory.CreateDirectory(outDir);
+            System.IO.Compression.ZipFile.ExtractToDirectory(zip, outDir);
+
+            string setup = null;
+            foreach (var f in Directory.GetFiles(outDir, "*.exe", SearchOption.AllDirectories))
+            {
+                if (Path.GetFileName(f).Equals("AirMouseSetup.exe", StringComparison.OrdinalIgnoreCase)) { setup = f; break; }
+            }
+            if (setup == null)
+            {
+                foreach (var f in Directory.GetFiles(outDir, "*Setup*.exe", SearchOption.AllDirectories)) { setup = f; break; }
+            }
+            if (setup == null)
+                throw new Exception("压缩包里没找到 AirMouseSetup.exe");
+
+            if (UpdateDryRun)
+            {
+                Log.Write("[i] --oneclick-dry：已解压到 " + outDir + "，找到 " + setup + "（不拉起安装器）");
+                BeginInvoke((Action)(() =>
+                {
+                    _updating = false;
+                    _updateLink.Enabled = true;
+                    _updateLink.Text = "【测试】下载+解压成功（dry-run 不装）";
+                }));
+                return;
+            }
+
+            Log.Write("[i] 一键更新：拉起安装程序 " + setup);
+            Process.Start(new ProcessStartInfo(setup)
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+                WorkingDirectory = Path.GetDirectoryName(setup)
+            });
+
+            BeginInvoke((Action)(() =>
+            {
+                _updating = false;
+                _updateLink.Enabled = true;
+                _updateLink.Text = "安装程序已打开：按提示点「安装 / 更新」，装完把本窗口关掉重开";
+            }));
+        }
+
+        /// <summary>
+        /// 挑一个能写的临时目录：先 %TEMP%\AirMouseUpdate，不行就带 pid 的，再不行用安装目录下的 _update。
+        /// （有的机器上安全软件会拦「未签名进程写用户目录」，这时候必须还能更新。）
+        /// </summary>
+        private static string PrepareUpdateDir()
+        {
+            var candidates = new List<string>
+            {
+                Path.Combine(Path.GetTempPath(), "AirMouseUpdate"),
+                Path.Combine(Path.GetTempPath(), "AirMouseUpdate-" + Process.GetCurrentProcess().Id),
+                Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "_update")
+            };
+
+            Exception last = null;
+            foreach (var dir in candidates)
+            {
+                try
+                {
+                    if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                    Directory.CreateDirectory(dir);
+                    var probe = Path.Combine(dir, ".w");
+                    File.WriteAllText(probe, "x");
+                    File.Delete(probe);
+                    return dir;
+                }
+                catch (Exception ex) { last = ex; }
+            }
+            throw new IOException("找不到可写的临时目录（最后一个错误：" + (last == null ? "?" : last.Message) + "）");
+        }
+
+        private static void DownloadToFile(string url, string path, Action<int> onPercent)
+        {
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11;
+            var req = (HttpWebRequest)WebRequest.Create(url);
+            req.Timeout = 15000;
+            req.ReadWriteTimeout = 30000;
+            req.UserAgent = "AirMouseServer/" + CurrentVersion();
+            using (var resp = (HttpWebResponse)req.GetResponse())
+            using (var rs = resp.GetResponseStream())
+            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                var total = resp.ContentLength;
+                var buf = new byte[65536];
+                long got = 0;
+                int lastPct = -1;
+                int n;
+                while ((n = rs.Read(buf, 0, buf.Length)) > 0)
+                {
+                    fs.Write(buf, 0, n);
+                    got += n;
+                    if (total > 0)
+                    {
+                        var pct = (int)(got * 100 / total);
+                        if (pct != lastPct)
+                        {
+                            lastPct = pct;
+                            try { onPercent(pct); } catch { }
+                        }
+                    }
+                }
+            }
         }
 
         private void OnClosing(object sender, FormClosingEventArgs e)
@@ -1522,6 +1716,23 @@ namespace AirMouse
                     MainForm.SetAutostartPublic(mode != "off");
                 }
                 return;
+            }
+
+            foreach (var a in args ?? new string[0])
+            {
+                if (a.StartsWith("--update-url=", StringComparison.OrdinalIgnoreCase))
+                    MainForm.DebugUpdateUrl = a.Substring("--update-url=".Length);
+                if (a.StartsWith("--oneclick=", StringComparison.OrdinalIgnoreCase))
+                {
+                    MainForm.DebugUpdateUrl = a.Substring("--oneclick=".Length);
+                    MainForm.AutoUpdateOnLoad = true;
+                }
+                if (a.StartsWith("--oneclick-dry=", StringComparison.OrdinalIgnoreCase))
+                {
+                    MainForm.DebugUpdateUrl = a.Substring("--oneclick-dry=".Length);
+                    MainForm.AutoUpdateOnLoad = true;
+                    MainForm.UpdateDryRun = true;
+                }
             }
 
             bool created;

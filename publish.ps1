@@ -83,7 +83,7 @@ if ($LASTEXITCODE -ne 0) { throw "csc 编译 AirMouseHook.dll 失败" }
 $exeTmp = Join-Path $root 'dist\_server_new.exe'
 Remove-Item $exeTmp -Force -ErrorAction SilentlyContinue
 & $Csc /nologo /target:winexe /codepage:65001 /optimize+ /r:System.Web.Extensions.dll `
-    /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.CSharp.dll `
+    /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.CSharp.dll /r:System.IO.Compression.FileSystem.dll `
     /win32icon:"$root\pc\airmouse.ico" /win32manifest:"$root\pc\app.manifest" /out:"$exeTmp" `
     "$root\pc\AirMouseServer.cs" "$root\pc\InjectorHost.cs" "$root\pc\AssemblyInfo.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc 编译失败" }
@@ -170,8 +170,6 @@ Write-Host "[5/7] 已提交" -ForegroundColor Cyan
 
 # 6) 打 tag + 推送
 & git tag -f "v$AppVersion"
-Set-Content -Path (Join-Path $root 'latest.txt') -Value "v$AppVersion" -Encoding ASCII -NoNewline
-& git add latest.txt
 $env:GIT_SSH_COMMAND = 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new'
 & git push origin main
 & git push origin "v$AppVersion"

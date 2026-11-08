@@ -1,14 +1,14 @@
 {
     "proto":  1,
     "apk":  {
-                "versionCode":  63,
-                "versionName":  "1.1.4",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.4/AirMouse-1.1.4.apk"
+                "versionCode":  64,
+                "versionName":  "1.1.5",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.5/AirMouse-1.1.5.apk"
             },
     "server":  {
-                   "version":  "1.1.1",
-                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.1/AirMouseServer-v1.1.1.zip"
+                   "version":  "1.1.2",
+                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.2/AirMouseServer-v1.1.2.zip"
                },
-    "notes":  "· 修复：调出手机键盘后陀螺仪/射线不再被关掉（打字时也能瞄准）\n· 修复：电脑端接收端不再「静默 60 秒就断线」（以前每隔一分钟闪一次已断开）\n· 锁屏密码框属于 Windows 安全桌面，普通程序无法注入，已在文档说明",
+    "notes":  "· 电脑端一键更新：收到新版本后点那行提示，接收端自己下载、解压并拉起安装器，不用再去浏览器里找 zip\n· 电脑端不再「安静 60 秒就断线」\n· 手机端：调出键盘后陀螺仪/射线不会被关掉\n· 锁屏密码框属于 Windows 安全桌面，普通程序无法注入（已在文档说明）",
     "publishedAt":  "2026-11-08"
 }
