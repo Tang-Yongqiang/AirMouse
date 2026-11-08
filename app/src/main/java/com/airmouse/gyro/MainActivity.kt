@@ -670,6 +670,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             net.stop()
             net.usbMode = true
             net.host = "127.0.0.1"
+            net.hosts = emptyList()
             net.port = prefs.port
             net.start()
         } else {
@@ -677,6 +678,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             net.stop()
             net.usbMode = false
             net.host = prefs.host
+            net.hosts = splitHosts(prefs.host)
             net.port = prefs.port
             if (prefs.host.isBlank()) {
                 statusTitle.text = "WiFi 模式"
@@ -1319,7 +1321,9 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         wrap.addView(portEdit, LinearLayout.LayoutParams(-1, -2))
 
         val tip = TextView(this)
-        tip.text = "电脑上双击 AirMouseSetup.exe 装好接收端就行\n本机 IP：" + localIp()
+        tip.text = "电脑上双击 AirMouseSetup.exe 装好接收端就行\n" +
+            "可以只填一个，也可以把电脑窗口里那串地址整段粘进来 —— 会按顺序自动挨个试，连上哪个用哪个。\n" +
+            "本机 IP：" + localIp()
         tip.setTextColor(ContextCompat.getColor(this, R.color.text_dim))
         tip.textSize = 11f
         tip.setPadding(0, pad / 2, 0, 0)
@@ -1336,10 +1340,12 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                 net.stop()
                 net.usbMode = false
                 net.host = prefs.host
+                net.hosts = splitHosts(prefs.host)
                 net.port = p
-                if (prefs.host.isBlank()) {
+                if (net.hosts.isEmpty()) {
                     toast("请填写电脑 IP")
                 } else {
+                    if (net.hosts.size > 1) toast("将按顺序试 ${net.hosts.size} 个地址")
                     net.start()
                 }
             }
@@ -1363,6 +1369,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                 net.stop()
                 net.usbMode = true
                 net.host = "127.0.0.1"
+                net.hosts = emptyList()
                 net.port = prefs.port
                 net.start()
             }
@@ -1695,6 +1702,22 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         row("躺着用", "选「相对」模式，射线需要手机大致朝着屏幕")
 
         sheet.show()
+    }
+
+    /**
+     * 把用户粘进来的地址拆成列表：允许空格 / 逗号 / 分号 / 顿号 / 斜杠分隔，
+     * 也允许直接粘电脑端那行「手机里填这个 IP（★ 是首选）：172.30.254.103  /  192.168.1.51 ★ …」——
+     * 里面的中文和星号会被自然过滤掉，只留下像 IP 的片段。
+     */
+    private fun splitHosts(raw: String): List<String> {
+        val out = ArrayList<String>()
+        for (piece in raw.split(' ', ',', '，', ';', '；', '/', '、', '\n', '\t', '|')) {
+            val s = piece.trim().trim('★').trim()
+            if (s.isEmpty()) continue
+            if (!s.matches(Regex("^[0-9]{1,3}(\\.[0-9]{1,3}){3}$")) && !s.matches(Regex("^[A-Za-z0-9._-]+$"))) continue
+            if (!out.contains(s)) out.add(s)
+        }
+        return out
     }
 
     private fun localIp(): String {

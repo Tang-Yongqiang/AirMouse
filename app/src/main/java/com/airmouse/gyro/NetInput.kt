@@ -46,6 +46,17 @@ class NetInput : InputSink {
     @Volatile
     var host: String = ""
 
+    /**
+     * 备用地址列表：电脑有多块网卡（局域网 / 自家热点 / VPN / WSL）时，
+     * 用户可以把窗口里那串地址整段粘进来，这里按顺序挨个试，连上哪个算哪个。
+     * 为空时退回 [host] 单个地址。
+     */
+    @Volatile
+    var hosts: List<String> = emptyList()
+
+    /** 当前正试到第几个地址（多地址时才用） */
+    private var hostIndex = 0
+
     @Volatile
     var port: Int = DEFAULT_PORT
 
@@ -107,18 +118,33 @@ class NetInput : InputSink {
 
     fun start() {
         if (running) return
-        val target = if (usbMode) LOOPBACK else host
-        if (target.isBlank()) {
+        val first = target()
+        if (first.isBlank()) {
             publish(State.ERROR, "请先填写电脑的 IP 地址")
             return
         }
         running = true
         failedAttempts = 0
+        hostIndex = 0
         queue.clear()
         val t = Thread({ loop() }, "airmouse-net")
         t.isDaemon = true
         worker = t
         t.start()
+    }
+
+    /** 这次该连哪个地址：USB 固定回环；WiFi 优先用备用列表，否则单地址 */
+    private fun targets(): List<String> {
+        if (usbMode) return listOf(LOOPBACK)
+        if (hosts.isNotEmpty()) return hosts
+        return if (host.isBlank()) emptyList() else listOf(host)
+    }
+
+    private fun target(): String {
+        val t = targets()
+        if (t.isEmpty()) return ""
+        if (t.size == 1) return t[0]
+        return t[hostIndex % t.size]
     }
 
     fun stop() {
@@ -131,12 +157,11 @@ class NetInput : InputSink {
     }
 
     private fun loop() {
-        val target = if (usbMode) LOOPBACK else host
         while (running) {
             if (socket == null) {
                 if (!tryConnect()) {
                     // 连续失败到上限就停下等人点「重连」，别在后台无限刷（耗电、刷日志、看着像卡死）
-                    if (!registerFailure(target)) return
+                    if (!registerFailure(target())) return
                     sleepQuiet(1500)
                     continue
                 }
@@ -169,11 +194,18 @@ class NetInput : InputSink {
      */
     private fun registerFailure(target: String): Boolean {
         failedAttempts++
+        // 有多个候选地址就换下一个再试：用户把整串 IP 粘进来时，这里自动帮他挨个试
+        val all = targets()
+        if (all.size > 1) {
+            hostIndex = (hostIndex + 1) % all.size
+            Diag.warn("NET", "换下一个地址试：${target()}（共 ${all.size} 个）")
+        }
         if (maxAttempts > 0 && failedAttempts >= maxAttempts) {
             running = false
+            val where = if (all.size > 1) "（试过 ${all.size} 个地址）" else ""
             publish(
                 State.FAILED,
-                "连不上 $target，已试 $failedAttempts 次，已暂停自动重试 · 点这里重连"
+                "连不上 $target$where，已试 $failedAttempts 次，已暂停自动重试 · 点这里重连"
             )
             Diag.warn("NET", "已停止重试（$failedAttempts 次）")
             return false
@@ -218,7 +250,7 @@ class NetInput : InputSink {
                     closeSocket()
                     if (running) {
                         if (lived in 0..3000) {
-                            if (!registerFailure(if (usbMode) LOOPBACK else host)) return@Thread
+                            if (!registerFailure(target())) return@Thread
                         } else {
                             failedAttempts = 0
                             publish(State.CONNECTING, "电脑端断开了，正在重连…")
@@ -232,7 +264,7 @@ class NetInput : InputSink {
     }
 
     private fun tryConnect(): Boolean {
-        val target = if (usbMode) LOOPBACK else host
+        val target = target()
         return try {
             val s = Socket()
             s.tcpNoDelay = true
@@ -244,8 +276,10 @@ class NetInput : InputSink {
             // 断线期间攒下的旧指令没必要补发，否则一连上光标会突然跳一下
             queue.clear()
             startReader(s)
+            if (!usbMode) host = target
+            val nth = if (targets().size > 1) "（第 ${hostIndex % targets().size + 1}/${targets().size} 个地址）" else ""
             Log.i(TAG, "connected to $target:$port usb=$usbMode")
-            Diag.log("NET", "已连接 $target:$port" + if (usbMode) " (USB)" else "")
+            Diag.log("NET", "已连接 $target:$port" + if (usbMode) " (USB)" else nth)
             publish(State.CONNECTED, "已连接 $target:$port")
             true
         } catch (e: Exception) {
