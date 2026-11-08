@@ -450,6 +450,9 @@ namespace AirMouse
     {
         private const int Port = 47777;
 
+        /// <summary>窗口标题的固定部分；真正显示时会拼上电脑端版本号（见构造函数）。</summary>
+        public const string AppTitle = "AirMouse 接收端";
+
         private readonly Label _status = new Label();
         private readonly Label _ips = new Label();
         private readonly LinkLabel _updateLink = new LinkLabel();
@@ -722,7 +725,7 @@ namespace AirMouse
 
         public MainForm()
         {
-            Text = "AirMouse 接收端";
+            Text = AppTitle + " " + CurrentVersion();
             ClientSize = new Size(700, 470);
             MinimumSize = new Size(480, 360);
             StartPosition = FormStartPosition.CenterScreen;
@@ -1146,6 +1149,7 @@ namespace AirMouse
 
             var ips = LocalIps();
             _ips.Text = "手机里填这个 IP：" + (ips.Count > 0 ? string.Join("  /  ", ips) : "（没找到网卡）") + "   端口 " + Port;
+            Log.Write("[i] AirMouse 接收端 v" + CurrentVersion() + " 启动（电脑端）");
 
             try
             {
@@ -1743,8 +1747,9 @@ namespace AirMouse
                     // 已经在跑了：把那个窗口叫到前台，然后安静退出（不要弹框，会卡住进程看着像卡死）
                     try
                     {
-                        IntPtr h = Native.FindWindow(null, "AirMouse 接收端");
-                        if (h == IntPtr.Zero) h = Native.FindWindowByProcess("AirMouseServer");
+                        // 标题里带了版本号，先按进程名找；找不到再退回「只有固定标题」的老版本
+                        IntPtr h = Native.FindWindowByProcess("AirMouseServer");
+                        if (h == IntPtr.Zero) h = Native.FindWindow(null, MainForm.AppTitle);
                         if (h != IntPtr.Zero)
                         {
                             Native.ShowWindow(h, 5 /* SW_SHOW */);
