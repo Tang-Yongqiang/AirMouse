@@ -450,6 +450,12 @@ namespace AirMouse
     {
         private const int Port = 47777;
 
+        /// <summary>
+        /// 协议版本。只要「手机端发来的指令写法」变了就 +1（手机端在 NetInput.PROTO 里对应）。
+        /// 两端不一致时，连上会互相提醒，而不是默默地不工作。
+        /// </summary>
+        private const int Proto = 1;
+
         /// <summary>窗口标题的固定部分；真正显示时会拼上电脑端版本号（见构造函数）。</summary>
         public const string AppTitle = "AirMouse 接收端";
 
@@ -535,10 +541,35 @@ namespace AirMouse
                     ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11;
                     string json = null;
                     var errors = new StringBuilder();
-                    // 第一步：直接用「本机版本号往后猜」去取清单（我们自己按 1.0.1、1.0.2 顺序发版，
-                    // 猜 3 个就够）。这条路不碰接口、也不碰 CDN 的分支缓存，最稳。
+                    // 第零步：直接读 @main 清单（raw 优先）。它永远是最新的，所以「只发电脑端」那种
+                    // 版本也能立刻被发现；tag 只作为它取不到时的后备。
                     try
                     {
+                        foreach (var url in ManifestUrls)
+                        {
+                            try
+                            {
+                                string body = Download(url);
+                                if (!string.IsNullOrEmpty(body) && body.IndexOf("\"server\"", StringComparison.Ordinal) >= 0)
+                                {
+                                    json = body;
+                                    Log.Write("[i] 清单来自 @main：" + HostOf(url));
+                                    break;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                if (errors.Length > 0) errors.Append("；");
+                                errors.Append(HostOf(url)).Append(" ").Append(ex.Message);
+                            }
+                        }
+                    }
+                    catch { }
+                    // 第一步：@main 拿不到时，用「本机版本号往后猜」去取 tag 清单（我们自己按 1.0.1、1.0.2 顺序发版，
+                    // 猜 3 个就够）。这条路不碰接口、也不碰 CDN 的分支缓存。
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(json)) throw new Exception("skip");
                         var cur = typeof(MainForm).Assembly.GetName().Version;
                         var guessLock = new object();
                         var guessBest = 0;
@@ -1360,6 +1391,16 @@ namespace AirMouse
                     catch { }
                     var buf = new byte[8192];
                     var sb = new StringBuilder();
+                    // 先打个招呼：手机端据此知道电脑端是哪一版、协议对不对。
+                    // 协议号只在「指令写法变了」时才 +1（见 NetInput.PROTO）。
+                    try
+                    {
+                        var hello = "{\"t\":\"hi\",\"server\":\"" + CurrentVersion() + "\",\"proto\":" + Proto + "}\n";
+                        var hb = Encoding.UTF8.GetBytes(hello);
+                        stream.Write(hb, 0, hb.Length);
+                        stream.Flush();
+                    }
+                    catch { }
                     while (_running)
                     {
                         int n;
@@ -1437,7 +1478,19 @@ namespace AirMouse
 
             object tv;
             string t = msg.TryGetValue("t", out tv) && tv != null ? tv.ToString() : null;
-            if (t == "m")
+            if (t == "hi")
+            {
+                // 手机端自报家门：用它判断「两端是不是配套的版本」
+                string app = msg.ContainsKey("app") && msg["app"] != null ? msg["app"].ToString() : "?";
+                int code = GetInt(msg, "code", 0);
+                int proto = GetInt(msg, "proto", 0);
+                Log.Write("[i] 手机端 " + app + "（vc" + code + "）· 协议 " + proto);
+                if (proto != Proto)
+                {
+                    Log.Write("[!] 协议不一致：电脑端 " + Proto + " / 手机端 " + proto + " —— 请把两端都更新到最新版本");
+                }
+            }
+            else if (t == "m")
             {
                 int dx = GetInt(msg, "dx"), dy = GetInt(msg, "dy");
                 MoveCount++;

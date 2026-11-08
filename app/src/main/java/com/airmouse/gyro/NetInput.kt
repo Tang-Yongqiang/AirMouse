@@ -39,7 +39,27 @@ class NetInput : InputSink {
          * 接收端启动时会自动执行这条命令（见 pc/airmouse_server.py 的 adb_reverse_watch）。
          */
         private const val LOOPBACK = "127.0.0.1"
+
+        /**
+         * 协议版本。只要「指令的写法」变了就 +1，两端不一致说明装的是不配套的版本，
+         * 连上握手时会互相提醒（见 [onServerInfo]）。
+         */
+        const val PROTO = 1
     }
+
+    /**
+     * 连上后电脑端会回一条 `{"t":"hi","server":"1.1.8","proto":1}`，
+     * 这里把它的版本号和协议号交给界面，用来提示「两端版本不配套」。
+     */
+    @Volatile
+    var onServerInfo: ((serverVersion: String, proto: Int) -> Unit)? = null
+
+    /** 界面启动时填进来，握手时告诉电脑端「我这边是哪一版」 */
+    @Volatile
+    var appVersion: String = ""
+
+    @Volatile
+    var appCode: Long = 0
 
     var listener: Listener? = null
 
@@ -235,11 +255,14 @@ class NetInput : InputSink {
      */
     private fun startReader(s: Socket) {
         val t = Thread({
-            val buf = ByteArray(128)
             try {
                 val ins = s.getInputStream()
+                // 电脑端只会回很短的几行（现在的握手 hi），按行读即可；
+                // readLine() 返回 null 就是对面关了，正好用来发现断开。
+                val reader = java.io.BufferedReader(java.io.InputStreamReader(ins, Charsets.UTF_8))
                 while (running && socket === s) {
-                    if (ins.read(buf) < 0) break
+                    val line = reader.readLine() ?: break
+                    if (line.isNotEmpty()) handleServerLine(line)
                 }
             } catch (_: Exception) {
             } finally {
@@ -263,6 +286,22 @@ class NetInput : InputSink {
         t.start()
     }
 
+    /** 电脑端下发的行（目前只有握手 hi），解析后交给界面做「版本不配套」提醒 */
+    private fun handleServerLine(line: String) {
+        try {
+            val o = org.json.JSONObject(line)
+            if (o.optString("t") != "hi") return
+            val server = o.optString("server", "")
+            val proto = o.optInt("proto", 0)
+            Diag.log("NET", "电脑端 $server · 协议 $proto")
+            if (proto != PROTO) {
+                Diag.warn("NET", "协议不一致：手机端 $PROTO / 电脑端 $proto")
+            }
+            onServerInfo?.invoke(server, proto)
+        } catch (_: Exception) {
+        }
+    }
+
     private fun tryConnect(): Boolean {
         val target = target()
         return try {
@@ -276,6 +315,17 @@ class NetInput : InputSink {
             // 断线期间攒下的旧指令没必要补发，否则一连上光标会突然跳一下
             queue.clear()
             startReader(s)
+            // 主动报一下自己是谁：电脑端据此知道我这边装的是哪一版、协议对不对
+            try {
+                push(
+                    org.json.JSONObject().put("t", "hi")
+                        .put("app", appVersion)
+                        .put("code", appCode)
+                        .put("proto", PROTO)
+                        .toString()
+                )
+            } catch (_: Exception) {
+            }
             if (!usbMode) host = target
             val nth = if (targets().size > 1) "（第 ${hostIndex % targets().size + 1}/${targets().size} 个地址）" else ""
             Log.i(TAG, "connected to $target:$port usb=$usbMode")

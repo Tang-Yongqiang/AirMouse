@@ -111,6 +111,29 @@ object Updater {
         }
         throw last ?: RuntimeException("no source")
     }
+    /** 取「最新」的那份：版本号大的赢；一样大时用 @main（说明和电脑端版本信息更新）。 */
+    private fun fresher(a: Info?, b: Info?): Info? = when {
+        a == null -> b
+        b == null -> a
+        b.versionCode >= a.versionCode -> b
+        else -> a
+    }
+
+    /**
+     * 直接读仓库根目录的 @main 清单（raw 优先）。tag 清单是「某一版」的定格，
+     * 而 @main 才是当前状态——只发电脑端（不动 APK 版本）时，只有这里能拿到新 server 版本。
+     */
+    private fun fetchMainInfo(): Info? {
+        for (url in MANIFEST_URLS) {
+            try {
+                return parse(fetch(url))
+            } catch (e: Exception) {
+                Diag.warn("UPD", "✗ @main " + hostOf(url) + " " + (e.message ?: ""))
+            }
+        }
+        return null
+    }
+
     /** 本机版本名，例如 1.0.3（用来往后猜下一个版本） */
     private fun myVersionName(ctx: Context): String = try {
         ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0.0.0"
@@ -177,7 +200,10 @@ object Updater {
                 }.apply { isDaemon = true }.start()
             }
             latch.await(5, java.util.concurrent.TimeUnit.SECONDS)
-            val bestGuess: Info? = bestGuessRef.get()
+            // @main 清单永远是最新的：和 tag 结果比一下，谁新用谁（只发电脑端时靠它传播）
+            val mainInfo = fetchMainInfo()
+            if (mainInfo != null) Diag.log("UPD", "✓ @main versionCode=" + mainInfo.versionCode)
+            val bestGuess: Info? = fresher(bestGuessRef.get(), mainInfo)
             if (bestGuess != null) {
                 handler.post { onResult(Result(bestGuess, null)) }
                 return@Thread
@@ -197,8 +223,8 @@ object Updater {
                     Diag.warn("UPD", "✗ @" + t + " " + (e.message ?: ""))
                 }
             }
-            if (best != null) {
-                handler.post { onResult(Result(best, null)) }
+            if (best != null || mainInfo != null) {
+                handler.post { onResult(Result(fresher(best, mainInfo), null)) }
                 return@Thread
             }
 

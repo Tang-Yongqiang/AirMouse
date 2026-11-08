@@ -112,6 +112,9 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
     private lateinit var kbScrim: View
     /** 关总开关时记下当时开着的陀螺仪模式，等下次连上电脑再恢复；用户在菜单里手动改过就作废 */
     private var gyroRestorePending = GYRO_OFF
+
+    /** 「两端协议不配套」只弹一次，免得每次重连都来一遍 */
+    private var protoWarned = false
     private lateinit var seekSens: SeekBar
     private lateinit var tvSens: TextView
     private lateinit var hintText: TextView
@@ -152,6 +155,28 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         net.listener = this
         net.host = prefs.host
         net.port = prefs.port
+        try {
+            val pi = packageManager.getPackageInfo(packageName, 0)
+            net.appVersion = pi.versionName ?: ""
+            net.appCode = pi.longVersionCode
+        } catch (_: Exception) {
+        }
+        // 电脑端连上后会报自己的版本和协议号：协议对不上就提醒一次，
+        // 避免「两端都以为在正常工作、其实指令对不上」的静默失败。
+        net.onServerInfo = { server, proto ->
+            main.post {
+                if (proto != NetInput.PROTO && !protoWarned) {
+                    protoWarned = true
+                    showSheet(
+                        "两端版本不配套",
+                        "手机端协议 ${NetInput.PROTO}，电脑端（$server）协议 $proto。\n" +
+                            "请把手机 App 和电脑端安装包都更新到最新版本，否则部分操作会没反应。",
+                        ok = "知道了",
+                        cancel = null
+                    )
+                }
+            }
+        }
 
         gyro = GyroEngine(this)
         gyro.listener = object : GyroEngine.Listener {

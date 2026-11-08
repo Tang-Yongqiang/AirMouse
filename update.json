@@ -1,15 +1,15 @@
 {
     "proto":  1,
     "apk":  {
-                "versionCode":  74,
-                "versionName":  "1.1.15",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.15/AirMouse-1.1.15.apk",
-                "notes":  "· 手机端这一版和 1.1.14 一样，没有功能变化\n· 本次发布主要是电脑端 1.1.8：修好了窗口底部按钮重叠、「查看日志」显示不全的问题"
+                "versionCode":  75,
+                "versionName":  "1.1.16",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.16/AirMouse-1.1.16.apk",
+                "notes":  "· 连上电脑后会互相确认版本：两端不配套时直接提示，不再出现「看着连上了、操作却没反应」\n· 检查更新改为直接读线上最新信息，电脑端单独更新也能马上知道\n· 更新说明继续显示「从你当前版本到最新版本」的全部改动"
             },
     "server":  {
-                   "version":  "1.1.8",
-                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.8/AirMouseServer-v1.1.8.zip",
-                   "notes":  "· 修好了窗口底部按钮互相重叠、「查看日志」显示不全的问题\n· 窗口默认更大，按钮放不下时会自动换行，不会再压住\n· 日志里的「本机 IP」后面带上了网卡名，方便判断该用哪个地址",
+                   "version":  "1.1.9",
+                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.9/AirMouseServer-v1.1.9.zip",
+                   "notes":  "· 手机连上时会显示它装的是哪一版；两端版本不配套会明确提示\n· 检查更新优先读线上最新信息，电脑端单独发版也能马上发现\n· 沿用上一轮的窗口修正：底部按钮不再重叠，「查看日志」能完整显示",
                    "minForApk":  ""
                },
     "history":  [
@@ -37,8 +37,13 @@
                         "versionCode":  74,
                         "versionName":  "1.1.15",
                         "notes":  "· 手机端这一版和 1.1.14 一样，没有功能变化\n· 本次发布主要是电脑端 1.1.8：修好了窗口底部按钮重叠、「查看日志」显示不全的问题"
+                    },
+                    {
+                        "versionCode":  75,
+                        "versionName":  "1.1.16",
+                        "notes":  "· 连上电脑后会互相确认版本：两端不配套时直接提示，不再出现「看着连上了、操作却没反应」\n· 检查更新改为直接读线上最新信息，电脑端单独更新也能马上知道\n· 更新说明继续显示「从你当前版本到最新版本」的全部改动"
                     }
                 ],
-    "notes":  "· 手机端这一版和 1.1.14 一样，没有功能变化\n· 本次发布主要是电脑端 1.1.8：修好了窗口底部按钮重叠、「查看日志」显示不全的问题",
+    "notes":  "· 连上电脑后会互相确认版本：两端不配套时直接提示，不再出现「看着连上了、操作却没反应」\n· 检查更新改为直接读线上最新信息，电脑端单独更新也能马上知道\n· 更新说明继续显示「从你当前版本到最新版本」的全部改动",
     "publishedAt":  "2026-11-08"
 }

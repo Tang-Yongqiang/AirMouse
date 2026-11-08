@@ -2,6 +2,21 @@
 
 > 技术记录，给开发/维护看。普通用户看到的说明在 `update.json` 的 `notes` 里（发版时用 `publish.ps1 -TechNotesFile` 分开写）。
 
+## 1.1.16 · 2026-11-08（电脑端 1.1.9）
+
+**用户可见**
+- · 连上电脑后会互相确认版本：两端不配套时直接提示，不再出现「看着连上了、操作却没反应」
+- · 检查更新改为直接读线上最新信息，电脑端单独更新也能马上知道
+- · 更新说明继续显示「从你当前版本到最新版本」的全部改动
+
+**技术细节**
+- - 新增连接握手：手机端连上发 `{"t":"hi","app":…,"code":…,"proto":1}`，电脑端回 `{"t":"hi","server":…,"proto":1}`；两端比对 `NetInput.PROTO` / `MainForm.Proto`，不一致时手机弹一次「两端版本不配套」、电脑端写 `[!] 协议不一致…`
+- - `NetInput` 的读线程从「丢弃字节只判 EOF」改为按行读，新增 `handleServerLine()` 解析 `hi`
+- - 手机端 `Updater.check()` 新增 `fresher()`/`fetchMainInfo()`：把仓库根 `@main` 清单并入候选，同版本优先用 `@main`（电脑端单独发版时靠它传播）
+- - 电脑端 `StartUpdateCheck` 新增「第零步」：先读 `ManifestUrls`（raw 优先）的 `@main` 清单，命中 `"server"` 就直接用，后面「猜 tag」「tags 接口」短路
+- - `publish.ps1` 支持 `-ServerOnly`（只升电脑端、保留 apk 段与 history、tag 用 `s<serverVersion>`）；`-AppVersion` 改为可省略但非 `-ServerOnly` 时必填
+- - 修 `publish.ps1` 丢 UTF-8 BOM 导致 PowerShell 5.1 按 ANSI 解析中文报错（改用 `UTF8Encoding($true,$false)` 写回）
+
 ## 1.1.15 · 2026-11-08（电脑端 1.1.8）
 
 **用户可见**
