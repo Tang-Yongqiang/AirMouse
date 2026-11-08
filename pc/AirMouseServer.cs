@@ -1363,6 +1363,34 @@ namespace AirMouse
                 try
                 {
                     var client = _listener.AcceptTcpClient();
+                    // 一个电脑只服务一台手机：新连接进来就把上一条顶掉。
+                    // 关键：关掉之前先给它发一行 bye —— 否则手机会立刻自动重连，两边无限互踢。
+                    try
+                    {
+                        TcpClient old = _activeClient;
+                        if (old != null && old != client)
+                        {
+                            // 上一条可能早就断了（手机切后台、关 App、换网络）。那种情况不该说「让位」，
+                            // 否则日志里会出现莫名其妙的「接管，已让上一条（?）让位」——bye 也发给了死 socket。
+                            string oldRemote = _activeRemote ?? "?";
+                            bool notified = false;
+                            try
+                            {
+                                var ns = old.GetStream();
+                                var bye = System.Text.Encoding.UTF8.GetBytes(
+                                    "{\"t\":\"bye\",\"reason\":\"replaced\",\"server\":\"" + CurrentVersion() + "\",\"proto\":" + Proto + "}\n");
+                                ns.Write(bye, 0, bye.Length);
+                                ns.Flush();
+                                notified = true;
+                            }
+                            catch { }
+                            try { old.Close(); } catch { }
+                            if (notified) Log.Write("[i] 新手机接入，" + SafeRemote(client) + " 接管，已让上一条（" + oldRemote + "）让位");
+                        }
+                        _activeClient = client;
+                        _activeRemote = SafeRemote(client);
+                    }
+                    catch { }
                     var t = new Thread(() => ServeClient(client));
                     t.IsBackground = true;
                     t.Start();
@@ -1371,6 +1399,14 @@ namespace AirMouse
             }
         }
 
+        // 当前拿到主控权的那条连接（后连上的顶掉先连上的）
+        private static TcpClient _activeClient;
+        // 记住上一条的地址：连接对象关掉之后就查不到 RemoteEndPoint 了，日志里会变成「?」
+        private static string _activeRemote;
+        private static string SafeRemote(TcpClient c)
+        {
+            try { return ((IPEndPoint)c.Client.RemoteEndPoint).Address.ToString(); } catch { return "?"; }
+        }
         private void ServeClient(TcpClient client)
         {
             string remote = "?";
@@ -1428,6 +1464,9 @@ namespace AirMouse
             finally
             {
                 UpdateClients(remote, false);
+                // 这条退出了就把槽位一起清掉：否则下一条连接会对着一个死 socket 发 bye，
+                // 日志还会冒出「接管，已让上一条（?）让位」这种假接管。
+                if (ReferenceEquals(_activeClient, client)) { _activeClient = null; _activeRemote = null; }
                 Log.Write("[-] 手机已断开 " + remote);
             }
         }

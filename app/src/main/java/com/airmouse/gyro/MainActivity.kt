@@ -281,6 +281,11 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         if (intent?.getBooleanExtra("enable", false) == true) {
             main.postDelayed({ setEnabled(true, false) }, 300)
         }
+        // 调试用：--ez retake true 等于「点一下状态栏」——被另一台手机接管后抢回主控权
+        // （HyperOS 会拦 adb 注入的点击，所以这条只能靠调试开关走）
+        if (intent?.getBooleanExtra("retake", false) == true) {
+            main.postDelayed({ net.retryNow() }, 600)
+        }
         // 调试用：--ez nobtauto true 不做「自动连回上次电脑」，用来观察 HID 就绪但未连接时的界面
         if (intent?.getBooleanExtra("nobtauto", false) == true) {
             autoConnectTried = true
@@ -363,9 +368,12 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         // 注意：listener 要同时挂到标题/副标题上 —— 有些 ROM 里子 TextView 自己吃掉点击，
         // 只挂在 statusBox 上会出现「点了完全没反应」（实测 ColorOS 就是）。
         val onStatusTap = View.OnClickListener {
-            if (enabled && mode != Prefs.MODE_BT && (netState == NetInput.State.FAILED || netState == NetInput.State.ERROR)) {
+            if (enabled && mode != Prefs.MODE_BT && (netState == NetInput.State.FAILED ||
+                    netState == NetInput.State.ERROR || netState == NetInput.State.KICKED)) {
+                // 被另一台手机接管时，这一下就是「抢回来」：retryNow() 会先清掉被接管标志再重连
+                val kicked = netState == NetInput.State.KICKED
                 net.retryNow()
-                toast("正在重新连接…")
+                toast(if (kicked) "正在重新接管…" else "正在重新连接…")
                 return@OnClickListener
             }
             when (mode) {
@@ -1059,6 +1067,9 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                     else "正在连接…"
                 NetInput.State.FAILED -> "连接失败 · 点这里重连"
                 NetInput.State.ERROR -> "连接异常 · 点这里重连"
+                // 一台电脑只服务一台手机，后连的那台会顶掉先连的。被顶掉的这台停在这里等用户决定：
+                // 点一下就去抢回来（另一台会收到同样的 bye，然后安静下来，不会来回抢）
+                NetInput.State.KICKED -> "已被另一台手机接管 · 点这里重新接管"
                 else -> "网络模式"
             }
             statusSub.text = decorateSub(net.transport, message)
@@ -1068,11 +1079,13 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                     NetInput.State.CONNECTING -> COLOR_MID
                     NetInput.State.FAILED -> COLOR_WARN
                     NetInput.State.ERROR -> COLOR_WARN
+                    NetInput.State.KICKED -> COLOR_WARN
                     else -> COLOR_IDLE
                 }
             )
-            // 失败/异常时整块状态栏都能点，点了就重新连（不用去翻设置）
-            statusBox.isClickable = state == NetInput.State.FAILED || state == NetInput.State.ERROR
+            // 失败/异常/被接管时整块状态栏都能点，点了就重新连（不用去翻设置）
+            statusBox.isClickable = state == NetInput.State.FAILED ||
+                state == NetInput.State.ERROR || state == NetInput.State.KICKED
             syncGyroWithLink()
         }
     }
@@ -2065,6 +2078,10 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             val dragMs = intent.getIntExtra("dragms", 3000)
             val startDelay = intent.getIntExtra("dragdelay", 2000)
             main.postDelayed({ startSyntheticDrag(dragMs) }, startDelay.toLong())
+        }
+        // 调试用：--ez retake true（已在跑的时候也能用，不用重启 App）
+        if (intent.getBooleanExtra("retake", false) == true) {
+            main.postDelayed({ net.retryNow() }, 300)
         }
         applyCornerExtras(intent)
     }

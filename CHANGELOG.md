@@ -2,6 +2,26 @@
 
 > 技术记录，给开发/维护看。普通用户看到的说明在 `update.json` 的 `notes` 里（发版时用 `publish.ps1 -TechNotesFile` 分开写）。
 
+## 1.1.18 · 2026-11-08（电脑端 1.1.10）
+
+**用户可见**
+- · 两台手机连同一台电脑时，后连上的自动接管，先连的那台会提示「已被另一台手机接管」
+- · 被接管时点一下状态栏那一行就能马上抢回来，不用重开 App
+- · 被接管的那台不会再偷偷重连，两台不会你顶我、我顶你地来回抢
+- · WiFi、USB 都能互踢；蓝牙是两台各连一路，互不影响，两台都能用
+
+**技术细节**
+- - 电脑端：`AcceptLoop()` 增加单槽 `_activeClient` + `SafeRemote()`；新连接先发 `{"t":"bye","reason":"replaced","server":<ver>,"proto":1}` 再 `Close()` 旧的，然后 `_activeClient = client`
+- - 电脑端：新增 `_activeRemote` 缓存地址；只有 bye 真的写成功（`notified = true`）才记「新手机接入，… 接管，已让上一条（…）让位」，避免残留 socket 让每条新连接都误报「接管（?）让位」
+- - 电脑端：`ServeClient` 的 finally 里 `if (ReferenceEquals(_activeClient, client)) { _activeClient = null; _activeRemote = null; }`，槽位随主控断开自动清空
+- - 手机端：`NetInput` 新增 `State.KICKED`、`@Volatile kickedOut`（private set）、`@Volatile onKicked`；`handleServerLine` 改成按 `t` 分派（`bye` → `onServerBye`，`hi` → `onServerHi`）
+- - 手机端：`onServerBye()` 顺序是 `kickedOut = true; running = false; queue.clear(); closeSocket();` 再 publish/回调 —— 顺序反了会被读线程抢先改成「正在重连…」，1.5 秒后又连回去，形成无限互踢
+- - 手机端：`loop()` 顶部、`registerFailure()` 开头、`startReader` 的 finally 三处按 `kickedOut` 提前退出；`start()` / `retryNow()` 清标志（手动「点回接管」是唯一的翻盘入口）
+- - 手机端 UI：状态栏 KICKED 文案「已被另一台手机接管 · 点这里重新接管」+ 红点 `COLOR_WARN` + `statusBox.isClickable`；`onStatusTap` 把 KICKED 并进「点了就重连」分支；新增调试开关 `--ez retake true`（HyperOS 拦 adb 注入点击，界面交互只能靠开关或手点）
+- - 构建：修 `app/build.gradle.kts` 的 verSuffix bug（原来 `versionName = "1.1.17"`，后缀根本没拼进去，测试包版本名不带 -test）
+- - 兼容性：`bye` 复用 proto 1（老客户端遇到不认识的 `t` 会忽略）。但 1.1.18 以前的手机被接管只表现为连接被断开，会自己重连 —— 新老混用时仍可能互顶，两端都升到 1.1.18 才干净
+- - 实测（红米 K70 + OPPO Find X8s）：USB+WiFi、WiFi+WiFi 双向互踢；6 次交替 retake 每次只产生一条接管记录，空闲 20 秒零重连；蓝牙为两路独立 HID（`Get-PnpDevice` 可见两组 BTHID），不经服务端、无接管语义
+
 ## 1.1.17 · 2026-11-08（电脑端 1.1.9）
 
 **用户可见**

@@ -22,7 +22,7 @@ import kotlin.math.roundToInt
  */
 class NetInput : InputSink {
 
-    enum class State { IDLE, CONNECTING, CONNECTED, ERROR, FAILED }
+    enum class State { IDLE, CONNECTING, CONNECTED, ERROR, FAILED, KICKED }
 
     interface Listener {
         fun onNetState(state: State, message: String)
@@ -53,6 +53,20 @@ class NetInput : InputSink {
      */
     @Volatile
     var onServerInfo: ((serverVersion: String, proto: Int) -> Unit)? = null
+
+    /**
+     * 被电脑端「让位」了：一台电脑只服务一台手机，后连上的那台会顶掉先连上的。
+     * 电脑端断开之前会先发一行 `{"t":"bye","reason":"replaced",...}`，收到就把这个标志置上，
+     * 并且**绝不自动重连** —— 否则两台手机会互相顶来顶去，谁也连不上（无限互踢）。
+     * 只有用户主动点状态栏（[retryNow]）或重新 [start] 时才清掉标志、去抢回主控权。
+     */
+    @Volatile
+    var kickedOut: Boolean = false
+        private set
+
+    /** 被接管时的回调（界面拿它显示「已被另一台手机接管」），在后台线程触发，界面自己切主线程 */
+    @Volatile
+    var onKicked: ((reason: String) -> Unit)? = null
 
     /** 界面启动时填进来，握手时告诉电脑端「我这边是哪一版」 */
     @Volatile
@@ -127,6 +141,8 @@ class NetInput : InputSink {
 
     /** 用户点「重连」：清零计数，线程还活着就让它接着试，已经停了就重新起一个 */
     fun retryNow() {
+        // 这也是「被另一台手机接管」之后唯一的翻盘入口：先清标志，再重连去抢回来
+        kickedOut = false
         failedAttempts = 0
         diagLastError = null
         if (running) {
@@ -137,6 +153,8 @@ class NetInput : InputSink {
     }
 
     fun start() {
+        // 主动 start（开总开关 / 换连接方式 / 用户点重连）都等于「我要连」，被接管的标志到此为止
+        kickedOut = false
         if (running) return
         val first = target()
         if (first.isBlank()) {
@@ -178,6 +196,12 @@ class NetInput : InputSink {
 
     private fun loop() {
         while (running) {
+            // 被接管了就不再自动重连：让位就让彻底，等用户自己点回来
+            if (kickedOut) {
+                running = false
+                closeSocket()
+                break
+            }
             if (socket == null) {
                 if (!tryConnect()) {
                     // 连续失败到上限就停下等人点「重连」，别在后台无限刷（耗电、刷日志、看着像卡死）
@@ -213,6 +237,11 @@ class NetInput : InputSink {
      * 因为这时候还在自动重试，点它没意义）；到上限才切到 FAILED 并返回 false 让循环退出。
      */
     private fun registerFailure(target: String): Boolean {
+        if (kickedOut) {
+            // 让位之后别把「被接管」又改写成「连不上」
+            running = false
+            return false
+        }
         failedAttempts++
         // 有多个候选地址就换下一个再试：用户把整串 IP 粘进来时，这里自动帮他挨个试
         val all = targets()
@@ -271,7 +300,8 @@ class NetInput : InputSink {
                     // 否则 USB 隧道在、电脑端没启动时会出现「连上→立刻断→重连」无限循环
                     val lived = System.currentTimeMillis() - connectedAt
                     closeSocket()
-                    if (running) {
+                    // 被接管后电脑端会主动断开：这不是掉线，别去重连，也别改状态栏文案
+                    if (running && !kickedOut) {
                         if (lived in 0..3000) {
                             if (!registerFailure(target())) return@Thread
                         } else {
@@ -286,20 +316,48 @@ class NetInput : InputSink {
         t.start()
     }
 
-    /** 电脑端下发的行（目前只有握手 hi），解析后交给界面做「版本不配套」提醒 */
+    /** 电脑端下发的行：握手 hi（版本提醒）、让位 bye（被另一台手机接管） */
     private fun handleServerLine(line: String) {
         try {
             val o = org.json.JSONObject(line)
-            if (o.optString("t") != "hi") return
-            val server = o.optString("server", "")
-            val proto = o.optInt("proto", 0)
-            Diag.log("NET", "电脑端 $server · 协议 $proto")
-            if (proto != PROTO) {
-                Diag.warn("NET", "协议不一致：手机端 $PROTO / 电脑端 $proto")
+            when (o.optString("t")) {
+                "bye" -> onServerBye(o.optString("reason", ""))
+                "hi" -> onServerHi(o)
             }
-            onServerInfo?.invoke(server, proto)
         } catch (_: Exception) {
         }
+    }
+
+    private fun onServerHi(o: org.json.JSONObject) {
+        val server = o.optString("server", "")
+        val proto = o.optInt("proto", 0)
+        Diag.log("NET", "电脑端 $server · 协议 $proto")
+        if (proto != PROTO) {
+            Diag.warn("NET", "协议不一致：手机端 $PROTO / 电脑端 $proto")
+        }
+        onServerInfo?.invoke(server, proto)
+    }
+
+    /**
+     * 电脑端说这条连接让给别人了。这里要做的只有三件事：置标志、停自动重连、告诉界面。
+     * 顺序很重要：先把 running 关掉再关 socket，否则读线程会抢先把状态改成「正在重连…」，
+     * 然后 1.5 秒后自动连回去，把刚连上的那台又顶掉 —— 两台手机就会无限互踢。
+     */
+    private fun onServerBye(reason: String) {
+        kickedOut = true
+        running = false
+        queue.clear()
+        closeSocket()
+        val replaced = reason == "replaced"
+        Diag.warn(
+            "NET",
+            if (replaced) "已被另一台手机接管，停止自动重连" else "电脑端结束了这条连接（$reason）"
+        )
+        publish(
+            State.KICKED,
+            if (replaced) "这台电脑现在由另一台手机控制" else "电脑端结束了这条连接"
+        )
+        onKicked?.invoke(reason)
     }
 
     private fun tryConnect(): Boolean {
