@@ -2,6 +2,19 @@
 
 > 技术记录，给开发/维护看。普通用户看到的说明在 `update.json` 的 `notes` 里（发版时用 `publish.ps1 -TechNotesFile` 分开写）。
 
+## 1.1.13 · 2026-11-08（电脑端 1.1.7）
+
+**用户可见**
+- · 修好了「发现新版本」时说明区空白的问题
+- · 更新信息现在每次都能取到最新的，不再被缓存挡住
+- · 同一个版本的更新提醒只弹一次，不会每次打开都打扰
+
+**技术细节**
+- - update.json 顶层补回 `notes`（publish.ps1 同时写顶层与 apk.notes），修复 ≤1.1.11 客户端只读顶层字段导致的「更新说明空白」
+- - `MainActivity.updateNotesText` 说明为空时兜底「这一版没有写更新说明，直接装就行。」
+- - `Updater.fetchByTag` / `AirMouseServer.DownloadTagged` 源顺序改为 raw → jsDelivr → gitee：jsDelivr 的 tag 快照实测 12 小时不刷新、`purge` 返回 200 但内容不变
+- - 相关提交：`4f8aedd`（顶层 notes）、`7ad1406`（兜底文案）、`a2946b4`（raw 优先）
+
 ## 1.1.12 · 2026-11-08（电脑端 1.1.6）
 
 **用户可见**

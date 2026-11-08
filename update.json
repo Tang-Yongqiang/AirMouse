@@ -1,17 +1,17 @@
 {
     "proto":  1,
     "apk":  {
-                "versionCode":  71,
-                "versionName":  "1.1.12",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.12/AirMouse-1.1.12.apk",
-                "notes":  "打开 App 会自动检查更新，发现新版本可以直接在 App 里下载安装\n同一个新版本只提示一次，点过「以后再说」就不再打扰\n蓝牙列表只显示电脑，最近连过的排最上面\n键盘面板：取消或点空白处可收起；没输入内容会提示"
+                "versionCode":  72,
+                "versionName":  "1.1.13",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.13/AirMouse-1.1.13.apk",
+                "notes":  "· 修好了「发现新版本」时说明区空白的问题\n· 更新信息现在每次都能取到最新的，不再被缓存挡住\n· 同一个版本的更新提醒只弹一次，不会每次打开都打扰"
             },
     "server":  {
-                   "version":  "1.1.6",
-                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.6/AirMouseServer-v1.1.6.zip",
-                   "notes":  "右下角新增「检查更新」按钮，随时可以手动检查\n检查结果是「已是最新版本」也会明确显示，不再点了没反应\n发现新版本会下载安装包并自动启动安装程序（需要点一次 UAC）\n每次打开本程序都会自动查一次更新\n安装器升级时自动沿用上次的安装目录，不用重新选",
+                   "version":  "1.1.7",
+                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.7/AirMouseServer-v1.1.7.zip",
+                   "notes":  "· 检查更新改为读取最新的发布信息，不会再看到过期的版本说明\n· 手动点「检查更新」时，已经是最新也会给一行提示",
                    "minForApk":  ""
                },
-    "notes":  "打开 App 会自动检查更新，发现新版本可以直接在 App 里下载安装\n同一个新版本只提示一次，点过「以后再说」就不再打扰\n蓝牙列表只显示电脑，最近连过的排最上面\n键盘面板：取消或点空白处可收起；没输入内容会提示",
+    "notes":  "· 修好了「发现新版本」时说明区空白的问题\n· 更新信息现在每次都能取到最新的，不再被缓存挡住\n· 同一个版本的更新提醒只弹一次，不会每次打开都打扰",
     "publishedAt":  "2026-11-08"
 }
