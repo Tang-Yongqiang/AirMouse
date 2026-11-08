@@ -786,10 +786,25 @@ namespace AirMouse
             copy.Padding = new Padding(8, 2, 8, 2);
             copy.Click += (s, e) =>
             {
+                // 只复制「首选」那一个地址：手机上的输入框只接受一个 IP，
+                // 复制整行 "A / B / C 端口 47777" 粘进去是连不上的。
                 try
                 {
-                    Clipboard.SetText(_ips.Text.Replace("手机里填这个 IP：", "").Trim());
-                    Log.Write("[i] IP 已复制到剪贴板");
+                    var ipsNow = LocalIps();
+                    string best = BestIp(ipsNow);
+                    if (best == null)
+                    {
+                        Log.Write("[!] 没找到可用的 IPv4 地址（网卡都没连上？）");
+                        return;
+                    }
+                    Clipboard.SetText(best);
+                    Log.Write("[i] 已复制首选 IP：" + best + "（手机 WiFi 模式里填这个）");
+                    string old = copy.Text;
+                    copy.Text = "已复制 " + best;
+                    var t = new System.Windows.Forms.Timer();
+                    t.Interval = 2000;
+                    t.Tick += (s2, e2) => { t.Stop(); t.Dispose(); try { copy.Text = old; } catch { } };
+                    t.Start();
                 }
                 catch { }
             };
@@ -1148,7 +1163,7 @@ namespace AirMouse
             };
 
             var ips = LocalIps();
-            _ips.Text = "手机里填这个 IP：" + (ips.Count > 0 ? string.Join("  /  ", ips) : "（没找到网卡）") + "   端口 " + Port;
+            _ips.Text = "手机里填这个 IP（★ 是首选）：" + IpLabel(ips) + "   端口 " + Port;
             Log.Write("[i] AirMouse 接收端 v" + CurrentVersion() + " 启动（电脑端）");
 
             try
@@ -1508,9 +1523,17 @@ namespace AirMouse
         }
 
         // -------------------------------------------------- 其它
-        private static List<string> LocalIps()
+        // 一块网卡上的一个 IPv4 地址（带网卡名/类型：要从中挑出「手机该填哪一个」）
+        private sealed class Nic
         {
-            var list = new List<string>();
+            public string Ip;
+            public string Name;
+            public System.Net.NetworkInformation.NetworkInterfaceType Type;
+        }
+
+        private static List<Nic> LocalIps()
+        {
+            var list = new List<Nic>();
             try
             {
                 foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
@@ -1521,12 +1544,70 @@ namespace AirMouse
                     {
                         if (ua.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
                         string s = ua.Address.ToString();
-                        if (!list.Contains(s)) list.Add(s);
+                        bool dup = false;
+                        foreach (var x in list) { if (x.Ip == s) { dup = true; break; } }
+                        if (dup) continue;
+                        list.Add(new Nic { Ip = s, Name = ni.Name, Type = ni.NetworkInterfaceType });
                     }
                 }
             }
             catch { }
             return list;
+        }
+
+        // 给每个地址打分，挑出手机最可能连得上的那一个。
+        // 为什么要挑：窗口里把所有网卡地址都列出来了（WSL 的 vEthernet、VPN 的 vgate0、没拿到 DHCP 的
+        // 169.254.x 也在里面），而手机上只能填一个，随便挑一个大概率连不上。
+        private static int IpScore(Nic n)
+        {
+            string ip = n.Ip ?? "";
+            string name = (n.Name ?? "").ToLowerInvariant();
+            int s = 0;
+
+            if (ip.StartsWith("169.254.")) return -1000;   // 自动私有地址，根本没有路由
+            if (name.Contains("vethernet") || name.Contains("vmware") || name.Contains("virtualbox") ||
+                name.Contains("hyper-v") || name.Contains("vgate") || name.Contains("tap") ||
+                name.Contains("tun") || name.Contains("bridge"))
+                s -= 200;                                  // 虚拟网卡：手机连不到
+            if (name.Contains("wlan") || name.Contains("wi-fi") || name.Contains("wireless"))
+                s += 30;                                   // 手机最可能就在这张网卡上
+
+            if (ip.StartsWith("192.168.137.")) s += 200;   // Windows 移动热点固定网段
+            else if (ip.StartsWith("192.168.")) s += 100;
+            else if (ip.StartsWith("10.")) s += 80;
+            else if (ip.StartsWith("172.")) s += 40;
+
+            return s;
+        }
+
+        private static string BestIp(List<Nic> ips)
+        {
+            if (ips == null || ips.Count == 0) return null;
+            Nic best = null;
+            int bestScore = int.MinValue;
+            foreach (var n in ips)
+            {
+                int sc = IpScore(n);
+                if (sc > bestScore) { bestScore = sc; best = n; }
+            }
+            if (best == null || bestScore < 0) return null;
+            return best.Ip;
+        }
+
+        // 窗口里那行说明：★ 标首选，192.168.137.x 标「热点」
+        private static string IpLabel(List<Nic> ips)
+        {
+            if (ips == null || ips.Count == 0) return "（没找到网卡）";
+            string best = BestIp(ips);
+            var sb = new StringBuilder();
+            foreach (var n in ips)
+            {
+                if (sb.Length > 0) sb.Append("  /  ");
+                sb.Append(n.Ip);
+                if (best != null && n.Ip == best) sb.Append(" ★");
+                if (n.Ip.StartsWith("192.168.137.")) sb.Append("（电脑热点）");
+            }
+            return sb.ToString();
         }
 
         private static int MoveCount = 0;

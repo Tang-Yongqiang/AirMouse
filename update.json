@@ -1,14 +1,14 @@
 {
     "proto":  1,
     "apk":  {
-                "versionCode":  65,
-                "versionName":  "1.1.6",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.6/AirMouse-1.1.6.apk"
+                "versionCode":  66,
+                "versionName":  "1.1.7",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.7/AirMouse-1.1.7.apk"
             },
     "server":  {
-                   "version":  "1.1.3",
-                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.3/AirMouseServer-v1.1.3.zip"
+                   "version":  "1.1.4",
+                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.4/AirMouseServer-v1.1.4.zip"
                },
-    "notes":  "· 电脑端：窗口标题里显示版本号（如「AirMouse 接收端 1.1.3」），日志首行也带上版本\n· 电脑端：一键更新（点提示自己下载→解压→拉起安装器）\n· 电脑端：不再「安静 60 秒就断线」\n· 手机端：调出键盘后陀螺仪/射线不会被关掉",
+    "notes":  "· 电脑端：「复制 IP」现在只复制首选那一个地址（以前把整行 A / B / C 都复制走，粘到手机上连不上）\n· 电脑端：地址列表里 ★ 标首选，电脑热点地址会注明（电脑热点）",
     "publishedAt":  "2026-11-08"
 }
