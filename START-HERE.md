@@ -1,4 +1,4 @@
-# 从这里开始
+﻿# 从这里开始
 
 这个仓库是**陀螺仪鼠标 AirMouse**：手机 APK + 电脑端安装程序，用手机陀螺仪/触摸板控制电脑鼠标键盘。
 
@@ -20,10 +20,11 @@
 
 ```powershell
 # 只升手机端（电脑端沿用现值）
-.\publish.ps1 -AppVersion 1.1.3
+.\publish.ps1 -AppVersion 1.1.17                       # 只升手机端
 
 # 手机端和电脑端一起升
-.\publish.ps1 -AppVersion 1.2.0 -ServerVersion 1.1.1
+.\publish.ps1 -AppVersion 1.2.0 -ServerVersion 1.2.0    # 两端一起升
+.\publish.ps1 -ServerOnly -ServerVersion 1.1.10          # 只升电脑端，不动 APK
 
 # 只在本机编 APK
 & 'C:\Users\Tangyq\.gradle\wrapper\dists\gradle-8.14.3-all\cbf6zifq8xavouihta8md72jo\gradle-8.14.3\bin\gradle.bat' -p . --offline assembleRelease
