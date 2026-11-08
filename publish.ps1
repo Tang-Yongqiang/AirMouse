@@ -1,4 +1,4 @@
-﻿# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
+# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
 #
 # 用法（在仓库根目录）：
 #   .\publish.ps1 -AppVersion 1.1.0 -Notes "新增：…`n修复：…"
@@ -173,6 +173,9 @@ $manifest = [ordered]@{
         notes = $ServerNotes
         minForApk = $MinServer
     }
+    # 兼容老客户端：1.1.11 及更早的 APK 只读顶层 notes（那时还没有 apk.notes）。
+    # 不写这一行，老版本用户点「发现新版本」会看到空白说明。
+    notes = $Notes
     publishedAt = (Get-Date -Format 'yyyy-MM-dd')
 }
 $json = $manifest | ConvertTo-Json -Depth 6
