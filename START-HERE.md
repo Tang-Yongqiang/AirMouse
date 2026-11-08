@@ -29,6 +29,9 @@
 & 'C:\Users\Tangyq\.gradle\wrapper\dists\gradle-8.14.3-all\cbf6zifq8xavouihta8md72jo\gradle-8.14.3\bin\gradle.bat' -p . --offline assembleRelease
 ```
 
+> ⚠️ 改完 `publish.ps1` 一定要存成 **UTF-8 with BOM**。用编辑器/写入工具保存常常丢掉 BOM，PowerShell 5.1 会按 ANSI 读，直接报 `Unexpected token '鐢ㄦ埛鍙'` 之类的乱码错误。补救：
+> `$p='publish.ps1'; $c=[IO.File]::ReadAllText($p,[Text.Encoding]::UTF8); [IO.File]::WriteAllText($p,$c,(New-Object Text.UTF8Encoding($true)))`
+
 ## 目录
 
 `app/` 安卓端 · `pc/` 电脑端 C# · `dist/` 构建产物（不进仓库）· `releases/` 已发布版本（app-v*/server-v*）· `_archive/` `_shots/` `_probes/` 本地留档与调试产物（被 `.gitignore` 忽略）
