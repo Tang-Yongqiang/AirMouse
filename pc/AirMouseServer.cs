@@ -1,4 +1,4 @@
-﻿// AirMouse 接收端（Windows 单文件 exe）
+// AirMouse 接收端（Windows 单文件 exe）
 // 编译：csc /target:winexe /codepage:65001 /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll AirMouseServer.cs
 //
 // 与 pc/airmouse_server.py 协议完全一致：一行一个 JSON
@@ -1066,7 +1066,12 @@ namespace AirMouse
                 using (client)
                 using (var stream = client.GetStream())
                 {
-                    client.ReceiveTimeout = 60000;
+                    // 千万不要设 ReceiveTimeout（曾经是 60000）：手机只要安静 60 秒
+                    //（在看网页、慢慢打字、只是没动手机）就会抛 IOException 判断线，
+                    // 表现就是「每隔一分钟断一次、状态一直闪」。真断线靠 TCP keepalive + 手机端自动重连兜底。
+                    client.ReceiveTimeout = 0;
+                    try { client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true); }
+                    catch { }
                     var buf = new byte[8192];
                     var sb = new StringBuilder();
                     while (_running)

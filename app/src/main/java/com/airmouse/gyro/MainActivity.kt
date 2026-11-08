@@ -1104,21 +1104,19 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         }
     }
 
-    /** 键盘弹出时先停陀螺仪/射线，免得打字时光标乱跑；收起后再恢复 */
+    /**
+     * 键盘弹出时**不再**停陀螺仪/射线。
+     *
+     * 老逻辑是「免得打字时光标乱跑」，但实际用起来是：点一下电脑上的输入框 → 手机调出键盘 →
+     * 陀螺仪被关掉 → 用户以为「鼠标死了」。打字时还要能瞄准本来就是刚需（比如点完搜索框再微调）。
+     * 现在只记一下面板状态，模式不动；真要临时停，右上角开关或陀螺仪下拉一点就行。
+     */
     private var gyroBeforeKeyboard = GYRO_OFF
+    private var keyboardOpen = false
     private var autoConnectTried = false
 
     private fun updateGyroForKeyboard(showing: Boolean) {
-        if (showing) {
-            if (gyroMode != GYRO_OFF) {
-                gyroBeforeKeyboard = gyroMode
-                setGyroMode(GYRO_OFF)
-            }
-        } else if (gyroBeforeKeyboard != GYRO_OFF) {
-            val restore = gyroBeforeKeyboard
-            gyroBeforeKeyboard = GYRO_OFF
-            setGyroMode(restore)
-        }
+        keyboardOpen = showing
     }
 
     // ---------------- 蓝牙选设备 ----------------
