@@ -704,8 +704,9 @@ namespace AirMouse
             Exception last = null;
             string[] urls =
             {
-                "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@" + tag + "/update.json",
+                // raw 放第一位：jsDelivr 的 tag 快照会缓存很久（清单改完几小时还是旧的，purge 也刷不掉）
                 "https://raw.githubusercontent.com/Tang-Yongqiang/AirMouse/" + tag + "/update.json",
+                "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@" + tag + "/update.json",
                 "https://gitee.com/Tang-Yongqiang/AirMouse/raw/" + tag + "/update.json"
             };
             foreach (var u in urls)

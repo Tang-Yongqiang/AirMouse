@@ -88,14 +88,14 @@ object Updater {
     }
 
     /**
-     * 按 tag 取清单：先 jsDelivr（快），失败再 raw.githubusercontent（刚推的新 tag 在 jsDelivr 上
-     * 可能要几分钟才索引到，raw 是 Git 服务器直出、立即可用，只是慢一点、国内偶尔被墙）。
+     * 按 tag 取清单。**raw 放第一位**：jsDelivr 的 tag 快照会缓存很久（实测清单改完几小时
+     * 还是旧的，purge 也刷不掉），raw 是 Git 服务器直出、实时；失败再退回 CDN 和 Gitee 镜像。
      */
     private fun fetchByTag(tag: String): String {
         var last: Exception? = null
         for (u in listOf(
-            "https://cdn.jsdelivr.net/gh/$OWNER/$REPO@$tag/update.json",
             "https://raw.githubusercontent.com/$OWNER/$REPO/$tag/update.json",
+            "https://cdn.jsdelivr.net/gh/$OWNER/$REPO@$tag/update.json",
             "https://gitee.com/$OWNER/$REPO/raw/$tag/update.json"
         )) {
             try {
