@@ -1714,7 +1714,8 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         for (piece in raw.split(' ', ',', '，', ';', '；', '/', '、', '\n', '\t', '|')) {
             val s = piece.trim().trim('★').trim()
             if (s.isEmpty()) continue
-            if (!s.matches(Regex("^[0-9]{1,3}(\\.[0-9]{1,3}){3}$")) && !s.matches(Regex("^[A-Za-z0-9._-]+$"))) continue
+            if (!s.matches(Regex("^[0-9]{1,3}(\\.[0-9]{1,3}){3}$")) &&
+                !s.matches(Regex("^[A-Za-z0-9._-]*[A-Za-z][A-Za-z0-9._-]*$"))) continue
             if (!out.contains(s)) out.add(s)
         }
         return out

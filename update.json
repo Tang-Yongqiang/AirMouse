@@ -1,14 +1,14 @@
 {
     "proto":  1,
     "apk":  {
-                "versionCode":  67,
-                "versionName":  "1.1.8",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.8/AirMouse-1.1.8.apk"
+                "versionCode":  68,
+                "versionName":  "1.1.9",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.9/AirMouse-1.1.9.apk"
             },
     "server":  {
                    "version":  "1.1.4",
                    "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.4/AirMouseServer-v1.1.4.zip"
                },
-    "notes":  "· WiFi 模式支持填多个地址：把电脑窗口里那串 IP 整段粘进来，会自动按顺序挨个试，连上哪个用哪个\n· 电脑端「复制 IP」现在只复制首选地址",
+    "notes":  "· WiFi 模式：把电脑窗口里那串 IP 整段粘进来即可，会按顺序自动挨个试\n· 粘贴时会自动滤掉端口号等无关文字\n· 电脑端「复制 IP」只复制首选地址",
     "publishedAt":  "2026-11-08"
 }
