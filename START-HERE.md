@@ -36,3 +36,8 @@
 ## 目录
 
 `app/` 安卓端 · `pc/` 电脑端 C# · `dist/` 构建产物（不进仓库）· `releases/` 已发布版本（app-v*/server-v*）· `_archive/` `_shots/` `_probes/` 本地留档与调试产物（被 `.gitignore` 忽略）
+
+> ⚠️ **老客户端发现的坑（2026-11-08 踩过）**
+> `releases\app-v*` 只保留最近 3 个，但「旧 tag 里的 `update.json`」仍然指向被删掉的目录；而老版本 App 只会按自己版本附近猜 tag，所以它会一直说自己是最新、或报一个已被删掉的下载地址。
+> 现在 `publish.ps1` 每次发布都会更新 `releases\stable\AirMouse.apk`（固定路径，永不删），并且 `update.json` 顶层保留 `versionCode / versionName / url / exe` 四个字段给 1.1.2 这类老客户端。
+> 另外：**不要再用 `git tag -f` 去重指老 tag** —— jsDelivr 的 tag 快照会缓存，改完几小时内仍返回旧内容。
