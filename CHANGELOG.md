@@ -2,6 +2,19 @@
 
 > 技术记录，给开发/维护看。普通用户看到的说明在 `update.json` 的 `notes` 里（发版时用 `publish.ps1 -TechNotesFile` 分开写）。
 
+## 1.1.14 · 2026-11-08（电脑端 1.1.7）
+
+**用户可见**
+- · 更新说明现在会列出从你当前版本到最新版本的**每一版**改动
+- · 隔了好几版没升级的，也能一次看清中间都改了什么
+
+**技术细节**
+- - update.json 新增 `history[]`（每版一条 versionCode/versionName/notes，保留最近 12 条），客户端据此把「当前版本 → 最新版本」之间的说明全部列出
+- - `Updater.kt` 增 `data class VersionNote` 与 `Info.history`；`parse()` 解析 `history` 并按 versionCode 升序
+- - `MainActivity.updateNotesText`：`history` 里 > 当前版本号的条目 ≥2 时按版本号逐段拼接（每段以版本号开头），否则退回单条 `notes`
+- - `publish.ps1` 发版时读旧 `update.json` 的 `history`，追加本版、去重、按 versionCode 排序、截断到 12 条
+- - 顺带把 1.1.11 / 1.1.12 / 1.1.13 的历史回填进 `update.json`
+
 ## 1.1.13 · 2026-11-08（电脑端 1.1.7）
 
 **用户可见**

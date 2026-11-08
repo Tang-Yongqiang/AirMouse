@@ -42,6 +42,9 @@ object Updater {
     // 而且返回顺序不保证；@main 的清单在每次发版时由 publish.ps1 主动 purge，
     // 实测 purge 之后几秒内就是新的，够用了。
 
+    /** 一个版本的更新说明（清单 history[] 里的一条） */
+    data class VersionNote(val versionCode: Int, val versionName: String, val notes: String)
+
     data class Info(
         val versionCode: Int,
         val versionName: String,
@@ -50,7 +53,9 @@ object Updater {
         /** 只放手机端的更新说明；电脑端内容在清单 server.notes 里，由电脑端自己显示 */
         val notes: String?,
         /** 这一版要求的最低电脑端版本（清单 server.minForApk）；没写就是不限制 */
-        val minServer: String? = null
+        val minServer: String? = null,
+        /** 逐版本说明，用来把「当前版本 → 最新版本」之间的改动全部展示出来 */
+        val history: List<VersionNote> = emptyList()
     )
 
     data class Result(val info: Info?, val error: String?) {
@@ -223,6 +228,18 @@ object Updater {
         val o = JSONObject(json)
         val apk = o.optJSONObject("apk")
         val srv = o.optJSONObject("server")
+        // 逐版本说明：老清单没有 history，就退化成只有最新一版
+        val hist = ArrayList<VersionNote>()
+        o.optJSONArray("history")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val e = arr.optJSONObject(i) ?: continue
+                val vc = e.optInt("versionCode", 0)
+                val vn = e.optString("versionName", "")
+                val nt = e.optString("notes", "")
+                if (vc > 0 && nt.isNotBlank()) hist.add(VersionNote(vc, vn, nt))
+            }
+        }
+        hist.sortBy { it.versionCode }
         val info = Info(
             versionCode = apk?.optInt("versionCode", 0) ?: o.optInt("versionCode", 0),
             versionName = apk?.optString("versionName", "")?.ifEmpty { null } ?: o.optString("versionName", ""),
@@ -230,7 +247,8 @@ object Updater {
             exeUrl = srv?.optString("url", "")?.ifEmpty { null } ?: o.optString("exe").ifEmpty { null },
             // 说明只取手机端那段（旧的顶层 notes 兼容一下）
             notes = apk?.optString("notes", "")?.ifEmpty { null } ?: o.optString("notes").ifEmpty { null },
-            minServer = srv?.optString("minForApk", "")?.ifEmpty { null }
+            minServer = srv?.optString("minForApk", "")?.ifEmpty { null },
+            history = hist
         )
         if (info.versionCode <= 0) throw RuntimeException("update.json 里没有 versionCode")
         return info

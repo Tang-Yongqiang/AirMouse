@@ -1,17 +1,39 @@
 {
     "proto":  1,
     "apk":  {
-                "versionCode":  72,
-                "versionName":  "1.1.13",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.13/AirMouse-1.1.13.apk",
-                "notes":  "· 修好了「发现新版本」时说明区空白的问题\n· 更新信息现在每次都能取到最新的，不再被缓存挡住\n· 同一个版本的更新提醒只弹一次，不会每次打开都打扰"
+                "versionCode":  73,
+                "versionName":  "1.1.14",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.14/AirMouse-1.1.14.apk",
+                "notes":  "· 更新说明现在会列出从你当前版本到最新版本的**每一版**改动\n· 隔了好几版没升级的，也能一次看清中间都改了什么"
             },
     "server":  {
                    "version":  "1.1.7",
                    "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.7/AirMouseServer-v1.1.7.zip",
-                   "notes":  "· 检查更新改为读取最新的发布信息，不会再看到过期的版本说明\n· 手动点「检查更新」时，已经是最新也会给一行提示",
+                   "notes":  "",
                    "minForApk":  ""
                },
-    "notes":  "· 修好了「发现新版本」时说明区空白的问题\n· 更新信息现在每次都能取到最新的，不再被缓存挡住\n· 同一个版本的更新提醒只弹一次，不会每次打开都打扰",
+    "history":  [
+                    {
+                        "versionCode":  70,
+                        "versionName":  "1.1.11",
+                        "notes":  "· 键盘面板：点「取消」或没输入内容就发送，不会再误发\n· 键盘面板四个快捷键顺序改为 Esc / Tab / ⌫ / ⏎\n· 安装器更新时自动沿用上次的安装目录，不用重新选\n· 卸载器改名为 uninstall.exe，卸载后不会留下自己"
+                    },
+                    {
+                        "versionCode":  71,
+                        "versionName":  "1.1.12",
+                        "notes":  "· 打开 App 会自动检查更新，发现新版本可直接在 App 里下载安装\n· 电脑端右下角新增「检查更新」，下载完可以自动启动安装程序\n· 更新说明按手机端/电脑端分开显示，不再混在一起"
+                    },
+                    {
+                        "versionCode":  72,
+                        "versionName":  "1.1.13",
+                        "notes":  "· 修好了「发现新版本」时说明区空白的问题\n· 更新信息现在每次都能取到最新的，不再被缓存挡住\n· 同一个版本的更新提醒只弹一次，不会每次打开都打扰"
+                    },
+                    {
+                        "versionCode":  73,
+                        "versionName":  "1.1.14",
+                        "notes":  "· 更新说明现在会列出从你当前版本到最新版本的**每一版**改动\n· 隔了好几版没升级的，也能一次看清中间都改了什么"
+                    }
+                ],
+    "notes":  "· 更新说明现在会列出从你当前版本到最新版本的**每一版**改动\n· 隔了好几版没升级的，也能一次看清中间都改了什么",
     "publishedAt":  "2026-11-08"
 }

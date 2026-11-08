@@ -159,6 +159,23 @@ Write-Host "[3/7] APK → releases\app-v$AppVersion；电脑端 → releases\ser
 Write-Host "      要发给别人的一个包：dist\AirMouse-$AppVersion-发送包.zip（$([math]::Round((Get-Item $sendZip).Length/1MB,2)) MB）" -ForegroundColor Cyan
 
 # 4) update.json：apk / server 两段分开写
+# 更新历史：客户端「当前版本」和最新版之间可能隔了好几版，要把中间每一版的说明都带上，
+# 所以清单里维护一个 history 数组（按 versionCode 升序，只留最近 12 条）。
+$hist = @()
+$uj = Join-Path $root 'update.json'
+if (Test-Path $uj) {
+    try {
+        $oldJson = ([IO.File]::ReadAllText($uj, [Text.Encoding]::UTF8)) | ConvertFrom-Json
+        if ($oldJson.history) { $hist = @($oldJson.history) }
+    } catch {
+        Write-Host "[4] 旧 update.json 解析失败，更新历史从空开始" -ForegroundColor Yellow
+    }
+}
+$hist = @($hist | Where-Object { $_ -and [int]$_.versionCode -ne [int]$code })
+$hist += [pscustomobject]@{ versionCode = [int]$code; versionName = $AppVersion; notes = $Notes }
+$hist = @($hist | Sort-Object { [int]$_.versionCode } | Select-Object -Last 12)
+Write-Host "[4] 更新历史共 $($hist.Count) 条（客户端会显示「自己那版之后」的所有改动）" -ForegroundColor Cyan
+
 $manifest = [ordered]@{
     proto = $Proto
     apk = [ordered]@{
@@ -173,6 +190,8 @@ $manifest = [ordered]@{
         notes = $ServerNotes
         minForApk = $MinServer
     }
+    # 逐版本的说明，客户端据此把「从你当前版本到最新」的改动串起来显示
+    history = $hist
     # 兼容老客户端：1.1.11 及更早的 APK 只读顶层 notes（那时还没有 apk.notes）。
     # 不写这一行，老版本用户点「发现新版本」会看到空白说明。
     notes = $Notes
