@@ -203,10 +203,24 @@ Copy-Item $exeOut (Join-Path $srvRel 'AirMouseServer.exe') -Force
 Copy-Item $hookOut (Join-Path $srvRel 'AirMouseHook.dll') -Force
 Copy-Item $setupOut (Join-Path $srvRel 'AirMouseSetup.exe') -Force
 Copy-Item $uninOut (Join-Path $srvRel 'uninstall.exe') -Force
+# 服务器现在是「裸 exe + 两个原生/托管 dll」的形态：
+#   ViGEmClient.dll —— 手柄模式（虚拟 Xbox 手柄）
+#   NAudio.dll      —— 音频通道（麦克风 / 电脑声音）
+# 少了它们，直接下 exe 的人会发现手柄和声音都用不了，所以一起放进目录和 zip。
+$srvDeps = @()
+foreach ($dep in @('NAudio.dll', 'ViGEmClient.dll')) {
+    $src = Join-Path $root "dist\$dep"
+    if (Test-Path $src) {
+        Copy-Item $src (Join-Path $srvRel $dep) -Force
+        $srvDeps += $src
+    } else {
+        Write-Host "警告：没找到 dist\$dep，服务器目录会缺这个依赖" -ForegroundColor Yellow
+    }
+}
 $exeZip = Join-Path $srvRel "AirMouseServer-v$ServerVersion.zip"
 Remove-Item $exeZip -Force -ErrorAction SilentlyContinue
 $readmeSrc = Join-Path $root 'pc\使用说明（先看这个）.txt'
-Compress-Archive -Path $setupOut, $readmeSrc -DestinationPath $exeZip -CompressionLevel Optimal
+Compress-Archive -Path (@($exeOut, $hookOut, $uninOut) + $srvDeps + $setupOut + $readmeSrc) -DestinationPath $exeZip -CompressionLevel Optimal
 Copy-Item $readmeSrc (Join-Path $srvRel '使用说明（先看这个）.txt') -Force
 
 # 给人发的一整包（放在 dist\，不进仓库，避免撑爆 jsDelivr 的 50 MB 上限）
@@ -221,6 +235,10 @@ if (-not $ServerOnly) {
 $stableDir = Join-Path $root 'releases\stable'
 New-Item -ItemType Directory -Path $stableDir -Force | Out-Null
 if ($exeOut -and (Test-Path $exeOut)) { Copy-Item $exeOut (Join-Path $stableDir 'AirMouseServer.exe') -Force }
+foreach ($dep in @('NAudio.dll', 'ViGEmClient.dll')) {
+    $src = Join-Path $root "dist\$dep"
+    if (Test-Path $src) { Copy-Item $src (Join-Path $stableDir $dep) -Force }
+}
 if ($setupOut -and (Test-Path $setupOut)) { Copy-Item $setupOut (Join-Path $stableDir 'AirMouseSetup.exe') -Force }
 if (-not $ServerOnly -and $apkOut -and (Test-Path $apkOut)) { Copy-Item $apkOut (Join-Path $stableDir 'AirMouse.apk') -Force }
 Write-Host "[3/7] $(if ($ServerOnly) { '电脑端' } else { 'APK' }) → releases\$(if ($ServerOnly) { "server-v$ServerVersion" } else { "app-v$AppVersion + server-v$ServerVersion" })" -ForegroundColor Cyan
