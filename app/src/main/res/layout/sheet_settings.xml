@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 设置底部抽屉：圆角顶、分组卡片、行内分段控件（2.6 起取代系统 AlertDialog 列表） -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- 外面套一层 NestedScrollView：选项一多，底部抽屉最多只能占满屏，超出的部分必须能滚，
+     否则最后几行（检查更新 / 全部重置）会被裁掉、永远点不到 -->
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_panel"
+    android:fillViewport="true"
+    android:scrollbars="none">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
     android:paddingBottom="18dp">
 
@@ -540,3 +548,5 @@
         android:textColor="@color/hint"
         android:textSize="11sp" />
 </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>

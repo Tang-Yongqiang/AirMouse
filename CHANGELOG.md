@@ -2,6 +2,15 @@
 
 > 技术记录，给开发/维护看。普通用户看到的说明在 `update.json` 的 `notes` 里（发版时用 `publish.ps1 -TechNotesFile` 分开写）。
 
+## 1.1.21 · 2026-11-14（电脑端 1.1.11）
+
+**用户可见**
+- · 修好设置页底部几个选项被裁掉的问题：设置现在可以上下滑动，「检查更新」「全部重置」都能看到也能点到了
+
+**技术细节**
+- · 设置抽屉（sheet_settings.xml）根布局由 LinearLayout 改为 NestedScrollView（fillViewport=true、scrollbars=none），修复内容超出抽屉最大高度时底部「检查更新 / 全部重置」被裁掉且无法滚动的问题
+- · 起因：新增「音频」三行后内容变高；BottomSheetDialog 高度上限为屏幕，wrap_content 的 LinearLayout 直接裁切
+
 ## 1.1.20 · 2026-11-14（电脑端 1.1.11）
 
 **用户可见**

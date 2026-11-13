@@ -12,12 +12,12 @@ android {
         applicationId = "com.airmouse.gyro"
         minSdk = 28
         targetSdk = 36
-        versionCode = 79
-        versionName = "1.1.20"
+        versionCode = 80
+        versionName = "1.1.21"
         // 本地测试构建用：-PverSuffix=-test 会得到 1.1.10-test，方便一眼认出不是发布版
         // 版本号（versionCode）保持不变，这样正式版照样能覆盖安装
         (project.findProperty("verSuffix") as String?)?.let {
-            versionName = "1.1.20$it"
+            versionName = "1.1.21$it"
         }
     }
 
