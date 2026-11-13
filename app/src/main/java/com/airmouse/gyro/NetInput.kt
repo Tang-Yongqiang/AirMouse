@@ -79,6 +79,10 @@ class NetInput : InputSink {
     @Volatile
     var appVersion: String = ""
 
+    /** 调试用：把每一帧手柄报文的收发打出来（--ez padsim 排查时开） */
+    @Volatile
+    var debugSend: Boolean = false
+
     @Volatile
     var appCode: Long = 0
 
@@ -228,6 +232,7 @@ class NetInput : InputSink {
                 w.write(line)
                 w.write("\n")
                 w.flush()
+                if (debugSend && line.contains("\"t\":\"g\"")) Diag.log("NET", "写出 $line")
                 if (line.contains("\"t\":\"s\"")) Log.i(TAG, "wrote text line (${line.length} chars)")
             } catch (e: InterruptedException) {
                 break
@@ -439,8 +444,12 @@ class NetInput : InputSink {
     }
 
     private fun push(json: String) {
-        if (!running) return
+        if (!running) {
+            if (debugSend && json.contains("\"t\":\"g\"")) Diag.warn("NET", "丢帧：没在跑 $json")
+            return
+        }
         if (!queue.offer(json)) {
+            if (debugSend && json.contains("\"t\":\"g\"")) Diag.warn("NET", "队列满，丢一帧")
             // 队列满了说明链路卡住，丢掉旧的
             queue.poll()
             queue.offer(json)

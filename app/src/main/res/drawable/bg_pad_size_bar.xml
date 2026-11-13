@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 手柄布局编辑时，底部「大小」滑条的底衬：半透明深色圆角块，让它浮在画面之上而不是压在边上 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#CC1B222B" />
+    <corners android:radius="18dp" />
+</shape>

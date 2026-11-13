@@ -300,7 +300,7 @@
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="top|end"
+            android:layout_gravity="top|start"
             android:layout_margin="6dp"
             android:orientation="horizontal">
 
@@ -350,14 +350,17 @@
         <!-- 编辑态：选中某个按键后，底部中央出现大小滑条（捏合缩放不好对准，改成滑条） -->
         <LinearLayout
             android:id="@+id/padSizeBar"
-            android:layout_width="match_parent"
+            android:layout_width="380dp"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="10dp"
+            android:layout_marginBottom="52dp"
+            android:background="@drawable/bg_pad_size_bar"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingStart="120dp"
-            android:paddingEnd="120dp"
+            android:paddingStart="14dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="4dp"
             android:visibility="gone">
 
             <TextView

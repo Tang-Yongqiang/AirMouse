@@ -2,6 +2,27 @@
 
 > 技术记录，给开发/维护看。普通用户看到的说明在 `update.json` 的 `notes` 里（发版时用 `publish.ps1 -TechNotesFile` 分开写）。
 
+## 1.1.20 · 2026-11-14（电脑端 1.1.11）
+
+**用户可见**
+- · 手柄按钮能整体调大小了，十字键不再挤在一起
+- · 布局编辑加了网格吸附；手柄铺满全屏，不再有白边
+- · 左摇杆按下即定位、推过头会跟手，右半屏整块是视角区
+- · 扳机改成按下即到底；调整大小的滑条挪到屏幕底部中央
+
+**技术细节**
+- · 手柄：ABXY/十字键按「组几何中心」缩放（键尺寸与相对组心偏移同倍放大），滑块 0.4×~2.5×，按组中心吸网格
+- · 手柄：左右摇杆改成整半屏热区（x<w/2 左摇杆、x>w/2 触摸板），静止不绘制；左摇杆按下即把基准点设到手指、超出一个半径后基准点跟手平移、松手/取消回位
+- · 手柄：右摇杆用浮动原点触摸板（PAD_DEADZONE 0.06 + smoothstep），整个右半屏可拖
+- · 手柄：扳机由模拟量改按钮语义（pressed 即 value=1f），并整体内缩 edge=dp(24f)，配合 systemGestureExclusionRects 避开系统返回手势
+- · 手柄：十字键改成单 Path（hor ∪ ver）一次绘制，消除四臂接缝；hitDpad 按相对中心的主方向选臂
+- · 手柄：布局编辑加网格，gridStep=min(w,h)/20，原点取屏幕中线（与左右分界线重合），拖动/缩放/进编辑态统一 snapToGrid
+- · 手柄：新增 DEFAULT_LAYOUT 常量（用户手摆版本，按比例存），rebuild 后先 applyDefaultLayout 再 applySaved；resetLayout 回出厂
+- · 手柄：进编辑态先 snapAllToGrid（组按组中心、候选 ±2 格避让、容忍原生重叠）
+- · 手柄：手柄模式真全屏 —— 隐藏 systemBars、cutout SHORT_EDGES、窗口底色 #FF12161C、insets 归零；退出恢复
+- · 手柄：底部大小滑条改 380dp 固定宽 + 52dp 底距 + bg_pad_size_bar 圆角底衬（手柄模式因 configChanges 不重建，实际用的是 layout/ 那份）
+- · 调试开关新增：--ez padsim / padsim2 / dpadsim / layoutedit / layoutreset / layoutpick / layoutgrow / gridsim / trigsim / dumplayout / micprio
+
 ## 1.1.19 · 2026-11-13（电脑端 1.1.11）
 
 **用户可见**

@@ -65,6 +65,21 @@ class GamepadView @JvmOverloads constructor(
         // 布局编辑里大小滑条的范围（相对默认尺寸的倍数）
         const val MIN_SCALE = 0.4f
         const val MAX_SCALE = 2.5f
+
+        /**
+         * 出厂布局（用户亲手摆的那一版，2026-11-14 固化）。
+         * 格式 `KEY:cx/fw,cy/fh,w/unit,h/unit;…`：
+         *   中心点按屏宽/屏高的比例，宽高按短边的比例 —— 换分辨率也按比例铺开。
+         * 想调默认值：在 App 里摆好 → `--ez dumplayout true` 把导出的串贴到这里即可。
+         */
+        private const val DEFAULT_LAYOUT =
+            "LT:0.042,0.29,0.075,0.3;RT:0.955,0.3,0.075,0.3;" +
+                "LB:0.125,0.2,0.16,0.11;RB:0.872,0.2,0.16,0.11;" +
+                "A:0.726,0.493,0.154,0.154;B:0.786,0.35,0.154,0.154;" +
+                "X:0.667,0.35,0.154,0.154;Y:0.726,0.207,0.154,0.154;" +
+                "UP:0.27,0.255,0.19,0.19;DOWN:0.27,0.445,0.19,0.19;" +
+                "LEFT:0.23,0.35,0.19,0.19;RIGHT:0.309,0.35,0.19,0.19;" +
+                "BACK:0.436,0.15,0.166,0.121;START:0.56,0.15,0.166,0.121"
     }
 
     // ---------- 控件 ----------
@@ -87,6 +102,8 @@ class GamepadView @JvmOverloads constructor(
         var round = false       // 圆形控件（摇杆/触摸板/ABXY）；矩形控件（肩键/扳机/十字键）保持 rr=0
         var baseW = 0f          // 默认宽高（量尺寸时记下来，滑条按它的倍数缩放）
         var baseH = 0f
+        var baseCx = 0f         // 默认圆心（组内缩放时按「相对组心的距离」等比放大）
+        var baseCy = 0f
     }
 
     private val controls = ArrayList<Control>()
@@ -107,6 +124,12 @@ class GamepadView @JvmOverloads constructor(
 
     /** 编辑模式里松手 / 退出编辑时回调，把最新布局交出去（由 Activity 存进 Prefs） */
     var onLayoutChanged: ((String) -> Unit)? = null
+
+    /** 调试用：把每次 emit 的摇杆值打到 logcat（--ez padsim 验证跟手时开） */
+    var debugEmit = false
+
+    /** 调试用：把编辑态拖拽的吸附计算打到 logcat（--ez gridsim 验证网格时开） */
+    var debugEdit = false
 
     private var viewW = 0
     private var viewH = 0
@@ -148,7 +171,13 @@ class GamepadView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        // 手柄铺满整屏时，别让系统的「边缘返回手势」把左右的 LT/RT 抢走
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            systemGestureExclusionRects = listOf(android.graphics.Rect(0, 0, w, h))
+        }
         rebuild(w, h)
+        // 出厂布局：用户亲手摆的那一版（见 DEFAULT_LAYOUT），按比例铺开
+        applyDefaultLayout()
         // 量到尺寸之后再把用户自己调过的布局盖上去（存档按比例存，所以换屏幕也不会跑偏）
         applySaved()
     }
@@ -161,41 +190,42 @@ class GamepadView @JvmOverloads constructor(
         val fh = h.toFloat()
         val unit = min(fw, fh)
 
-        // 扳机：左右各一条竖条，贴着屏幕边（真实手柄上它们就在这个位置）
+        // 扳机：左右各一条竖条，贴着屏幕边（真实手柄上它们就在这个位置）。
+        // 往里让 24dp：太贴边会被系统的「返回」手势抢走触摸。
         val trigW = unit * 0.075f
         val trigH = fh * 0.30f
+        val edge = dp(24f)
         controls += Control(Kind.TRIGGER, 0, "LT").apply {
-            rect.set(dp(10f), fh * 0.14f, dp(10f) + trigW, fh * 0.14f + trigH)
+            rect.set(edge, fh * 0.14f, edge + trigW, fh * 0.14f + trigH)
         }
         controls += Control(Kind.TRIGGER, 0, "RT").apply {
-            rect.set(fw - dp(10f) - trigW, fh * 0.14f, fw - dp(10f), fh * 0.14f + trigH)
+            rect.set(fw - edge - trigW, fh * 0.14f, fw - edge, fh * 0.14f + trigH)
         }
 
         // 肩键：扳机右边/左边横条
         val shW = unit * 0.16f
         controls += Control(Kind.BUTTON, BTN_LB, "LB").apply {
-            rect.set(dp(10f) + trigW + dp(8f), fh * 0.16f, dp(10f) + trigW + dp(8f) + shW, fh * 0.16f + fh * 0.11f)
+            rect.set(edge + trigW + dp(8f), fh * 0.16f, edge + trigW + dp(8f) + shW, fh * 0.16f + fh * 0.11f)
         }
         controls += Control(Kind.BUTTON, BTN_RB, "RB").apply {
-            rect.set(fw - dp(18f) - trigW - shW, fh * 0.16f, fw - dp(18f) - trigW, fh * 0.16f + fh * 0.11f)
+            rect.set(fw - edge - dp(8f) - trigW - shW, fh * 0.16f, fw - edge - dp(8f) - trigW, fh * 0.16f + fh * 0.11f)
         }
 
-        // 左摇杆：左上方（和 Xbox 手柄一样，摇杆在上，十字键在下）
+        // 左摇杆：不画 —— 整个左半边空白处都是它的区域，手指落下去才在落点长出来。
+        // 区域给满，是为了「随手一按就在摇杆上」，不用瞄着某个圈去摸。
         val sr = unit * 0.145f
         lstick = Control(Kind.STICK).apply {
-            cx = fw * 0.155f; cy = fh * 0.32f; r = sr
-            rect.set(cx - sr, cy - sr, cx + sr, cy + sr)
+            r = sr
+            rect.set(0f, 0f, fw * 0.5f, fh)
+            cx = rect.centerX(); cy = rect.centerY()
         }
         controls += lstick
 
-        // 右摇杆 → 触摸板：正方形，放在 ABXY 的左下（也是 Xbox 的相对位置）。
-        // 手指落在哪就从哪起算，滑出一个半径 = 拨到底
-        val padSide = unit * 0.36f
+        // 右摇杆：同样不画，整个右半边空白处都是它（调视角用），落点即中心、推出去就转。
         touchpad = Control(Kind.PAD).apply {
-            cx = fw * 0.70f
-            cy = fh * 0.74f
-            rect.set(cx - padSide / 2f, cy - padSide / 2f, cx + padSide / 2f, cy + padSide / 2f)
-            r = padSide * 0.42f
+            r = unit * 0.135f
+            rect.set(fw * 0.5f, 0f, fw, fh)
+            cx = rect.centerX(); cy = rect.centerY()
         }
         controls += touchpad
 
@@ -209,6 +239,8 @@ class GamepadView @JvmOverloads constructor(
                 cx = bx + dx; cy = by + dy; r = br
                 rect.set(cx - br, cy - br, cx + br, cy + br)
                 tint = color
+                // 四个键当成一个整体：调大小时整块区域等比放大，相对距离跟着走
+                group = "ABXY"
             }
         }
         diamond(BTN_A, "A", 0f, gap, 0xFF4CAF50.toInt())
@@ -253,6 +285,8 @@ class GamepadView @JvmOverloads constructor(
             // 默认尺寸记下来，滑条后面按「默认 × 倍数」缩放，复位也就是倍数回 1
             c.baseW = c.rect.width()
             c.baseH = c.rect.height()
+            c.baseCx = c.rect.centerX()
+            c.baseCy = c.rect.centerY()
             when (c.label) {
                 "LT" -> c.key = "LT"
                 "RT" -> c.key = "RT"
@@ -288,6 +322,8 @@ class GamepadView @JvmOverloads constructor(
         val sb = StringBuilder()
         for (c in controls) {
             if (c.key.isEmpty()) continue
+            // 两个摇杆是「整半屏」的区域，位置/大小没有意义，不参与存档
+            if (c.kind == Kind.STICK || c.kind == Kind.PAD) continue
             if (sb.isNotEmpty()) sb.append(';')
             sb.append(c.key).append(':')
             sb.append(r3(c.rect.centerX() / fw)).append(',')
@@ -301,6 +337,25 @@ class GamepadView @JvmOverloads constructor(
     /** 套用存下来的布局；传空串等于全用默认 */
     fun importLayout(s: String) {
         saved.clear()
+        saved.putAll(parseLayout(s))
+        applySaved()
+        invalidate()
+    }
+
+    /** 恢复出厂布局 */
+    fun resetLayout() {
+        saved.clear()
+        if (viewW > 0 && viewH > 0) {
+            rebuild(viewW, viewH)
+            applyDefaultLayout()
+        }
+        invalidate()
+        onLayoutChanged?.invoke(exportLayout())
+    }
+
+    /** 把 "KEY:cx/fw,cy/fh,w/unit,h/unit;…" 解析成 key → 四个比例 */
+    private fun parseLayout(s: String): HashMap<String, FloatArray> {
+        val map = HashMap<String, FloatArray>()
         for (part in s.split(';')) {
             val i = part.indexOf(':')
             if (i <= 0) continue
@@ -313,18 +368,39 @@ class GamepadView @JvmOverloads constructor(
                 if (f == null) { ok = false; break }
                 v[k] = f
             }
-            if (ok) saved[part.substring(0, i).trim()] = v
+            if (ok) map[part.substring(0, i).trim()] = v
         }
-        applySaved()
-        invalidate()
+        return map
     }
 
-    /** 恢复出厂布局 */
-    fun resetLayout() {
-        saved.clear()
-        if (viewW > 0 && viewH > 0) rebuild(viewW, viewH)
-        invalidate()
-        onLayoutChanged?.invoke(exportLayout())
+    /**
+     * 出厂布局：见上面的 DEFAULT_LAYOUT 常量。
+     * 它和「用户自己调的」走同一套解析，只不过这套位置是随包发布的，
+     * 所以尺寸/位置都按比例存 —— 换一台分辨率不同的手机也按比例铺开。
+     */
+    private fun applyDefaultLayout() {
+        if (DEFAULT_LAYOUT.isEmpty()) return
+        val fw = viewW.toFloat()
+        val fh = viewH.toFloat()
+        if (fw <= 0f || fh <= 0f) return
+        val unit = min(fw, fh)
+        val map = parseLayout(DEFAULT_LAYOUT)
+        for (c in controls) {
+            if (c.key.isEmpty()) continue
+            if (c.kind == Kind.STICK || c.kind == Kind.PAD) continue
+            val v = map[c.key] ?: continue
+            val w = (v[2] * unit).coerceAtLeast(dp(26f))
+            val h = (v[3] * unit).coerceAtLeast(dp(26f))
+            val cx = (v[0] * fw).coerceIn(0f, fw)
+            val cy = (v[1] * fh).coerceIn(0f, fh)
+            c.rect.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f)
+            syncCenter(c)
+            // 出厂位置就是「默认位置」：滑条缩放按它当 1.0×
+            c.baseW = w
+            c.baseH = h
+            c.baseCx = cx
+            c.baseCy = cy
+        }
     }
 
     private fun applySaved() {
@@ -335,6 +411,7 @@ class GamepadView @JvmOverloads constructor(
         for (c in controls) {
             val v = saved[c.key] ?: continue
             if (c.key.isEmpty()) continue
+            if (c.kind == Kind.STICK || c.kind == Kind.PAD) continue
             val w = (v[2] * unit).coerceAtLeast(dp(26f))
             val h = (v[3] * unit).coerceAtLeast(dp(26f))
             val cx = (v[0] * fw).coerceIn(0f, fw)
@@ -353,15 +430,21 @@ class GamepadView @JvmOverloads constructor(
         c.cx = c.rect.centerX()
         c.cy = c.rect.centerY()
         if (!c.round) return
-        c.r = if (c.kind == Kind.PAD) min(c.rect.width(), c.rect.height()) * 0.42f
-        else min(c.rect.width(), c.rect.height()) / 2f
+        // 两个摇杆的半径是固定的（决定推多远算拨到底），不跟着区域大小变
+        if (c.kind == Kind.STICK || c.kind == Kind.PAD) return
+        c.r = min(c.rect.width(), c.rect.height()) / 2f
     }
 
     // ---------- 编辑模式 ----------
 
     fun setEditMode(on: Boolean) {
         // 进编辑态之前先松手发一帧：不然手指正按着 A 进编辑，电脑端会一直按着 A 不放
-        if (on) reset()
+        if (on) {
+            reset()
+            // 一进来就把所有控件对到网格上：默认布局本身不是照网格摆的，
+            // 不先吸一遍的话「所有控件的中心都在交叉点」这句就不成立。
+            snapAllToGrid()
+        }
         editMode = on
         if (!on) {
             selected = null
@@ -369,6 +452,158 @@ class GamepadView @JvmOverloads constructor(
             onLayoutChanged?.invoke(exportLayout())
         }
         invalidate()
+    }
+
+    /**
+     * 把所有可编辑控件的中心吸到最近的网格交叉点。
+     * 成组的（ABXY / 十字键）按组走：以组里第一个成员的中心为准，整组平移，相对位置不变。
+     */
+    /**
+     * 吸网格的统一定义：**成组的用整组的几何中心**（四个键中心的中点，也就是外接框中心），
+     * 单个控件用自己的中心。这样 ABXY / 十字键永远是「整块」对齐到交叉点，
+     * 不会出现「按住的这颗对上了、别的三颗全歪着」。
+     */
+    private fun snapTargetCenter(c: Control): FloatArray {
+        val box = groupBox(c)
+        return floatArrayOf(box.centerX(), box.centerY())
+    }
+
+    /** 把控件（或它那一组）整体平移，让它的几何中心落在网格交叉点上 */
+    private fun snapGroupToGrid(c: Control): Boolean {
+        val gx = groupOf(c)
+        val cur = snapTargetCenter(c)
+        var dx = snapToGrid(cur[0], gridOriginX()) - cur[0]
+        var dy = snapToGrid(cur[1], gridOriginY()) - cur[1]
+        if (dx == 0f && dy == 0f) return false
+        // 别把整组推出屏幕
+        val box = groupBox(c)
+        if (box.left + dx < 0f) dx = -box.left
+        if (box.right + dx > viewW) dx = viewW - box.right
+        if (box.top + dy < 0f) dy = -box.top
+        if (box.bottom + dy > viewH) dy = viewH - box.bottom
+        for (g in gx) {
+            g.rect.offset(dx, dy)
+            g.baseCx += dx
+            g.baseCy += dy
+            syncCenter(g)
+        }
+        return true
+    }
+
+    private fun snapAllToGrid() {
+        if (viewW <= 0 || viewH <= 0) return
+        val step = gridStep()
+        if (step <= 0f) return
+
+        // 先把「单元」列出来：单键一个单元，成组的整组一个单元
+        val done = HashSet<Control>()
+        val units = ArrayList<Control>()
+        for (c in controls) {
+            if (c.key.isEmpty()) continue
+            if (c.kind == Kind.STICK || c.kind == Kind.PAD) continue
+            if (done.contains(c)) continue
+            units += c
+            done.addAll(groupOf(c))
+        }
+        // 大块先摆，小块后摆 —— 小块还能绕着大块找空位
+        units.sortByDescending { val b = groupBox(it); b.width() * b.height() }
+
+        val placed = ArrayList<Control>()
+        // 出厂布局里本来就叠着的（比如 RB 压在 RT 竖条上）不算「新压上去」，不拦它吸网格
+        val origRects = HashMap<Control, RectF>()
+        for (c in controls) origRects[c] = RectF(c.rect)
+        // 候选偏移：从最近的格子开始一圈圈往外找（最多两格），先保证「落在交叉点上」，
+        // 再保证「不压到别的键」—— 两个都做不到才留在原地。
+        val cand = ArrayList<IntArray>()
+        for (r in 0..2) {
+            for (ox in -r..r) for (oy in -r..r) {
+                if (maxOf(Math.abs(ox), Math.abs(oy)) != r) continue
+                cand.add(intArrayOf(ox, oy))
+            }
+        }
+
+        for (u in units) {
+            val gx = groupOf(u)
+            val box = groupBox(u)
+            val cx = box.centerX()
+            val cy = box.centerY()
+            val baseX = snapToGrid(cx, gridOriginX())
+            val baseY = snapToGrid(cy, gridOriginY())
+
+            // 本来就和它叠着的控件，吸过去时不算冲突
+            val tolerated = HashSet<Control>()
+            for (g in gx) {
+                val rg = origRects[g] ?: continue
+                for (c in controls) {
+                    if (c.key.isEmpty()) continue
+                    if (gx.contains(c)) continue
+                    val rc = origRects[c] ?: continue
+                    if (RectF.intersects(rg, rc)) tolerated.add(c)
+                }
+            }
+
+            var dx = 0f
+            var dy = 0f
+            var ok = false
+            for (c0 in cand) {
+                val ddx = baseX + c0[0] * step - cx
+                val ddy = baseY + c0[1] * step - cy
+                if (box.left + ddx < 0f || box.right + ddx > viewW) continue
+                if (box.top + ddy < 0f || box.bottom + ddy > viewH) continue
+                if (!collides(gx, ddx, ddy, placed, tolerated)) {
+                    dx = ddx; dy = ddy; ok = true
+                    break
+                }
+            }
+            // 九个位置都塞不下就先不动它（一般不会发生），总比压在一起强
+            if (!ok) {
+                placed.addAll(gx)
+                continue
+            }
+            if (dx != 0f || dy != 0f) {
+                for (g in gx) {
+                    g.rect.offset(dx, dy)
+                    g.baseCx += dx
+                    g.baseCy += dy
+                    syncCenter(g)
+                }
+            }
+            placed.addAll(gx)
+        }
+    }
+
+    /** 把这一组按 (dx,dy) 预移一下，会不会压到已经摆好的那些（贴边擦过不算压，留 3dp 余量） */
+    private fun collides(
+        gx: List<Control>,
+        dx: Float,
+        dy: Float,
+        placed: List<Control>,
+        tolerated: Set<Control>
+    ): Boolean {
+        val pad = dp(3f)
+        for (g in gx) {
+            val r = RectF(g.rect)
+            r.offset(dx, dy)
+            r.inset(pad, pad)
+            for (p in placed) {
+                if (gx.contains(p) || tolerated.contains(p)) continue
+                val q = RectF(p.rect)
+                q.inset(pad, pad)
+                if (RectF.intersects(r, q)) return true
+            }
+        }
+        return false
+    }
+
+    /** 这一组（按外接矩形算）有没有压到组外的其它控件 */
+    private fun overlapsOther(gx: List<Control>): Boolean {
+        for (c in controls) {
+            if (c.key.isEmpty()) continue
+            if (c.kind == Kind.STICK || c.kind == Kind.PAD) continue
+            if (gx.contains(c)) continue
+            for (g in gx) if (g.rect.intersect(c.rect)) return true
+        }
+        return false
     }
 
     /** 按名字选中一个控件（调试/测试用，省得靠点） */
@@ -387,21 +622,67 @@ class GamepadView @JvmOverloads constructor(
     }
 
     /**
-     * 按滑条的数值缩放当前选中的控件：以它自己的默认尺寸为基准，中心点不动。
-     * 十字键是四个方向一组，整组等比缩放，不然会散架。
+     * 按滑条的数值缩放当前选中的控件：以「默认尺寸」为基准，中心点不动。
+     * 成组的东西（十字键四个方向、ABXY 四个键）整体缩放 —— 不是各自放大：
+     * 那样中心不动、按键变大，很快就互相压在一起了。这里把整组的相对间距一起放大。
      */
     fun setSelectedScale(s: Float) {
         val c = selected ?: return
         val k = s.coerceIn(MIN_SCALE, MAX_SCALE)
-        for (g in groupOf(c)) {
+        val members = groupOf(c)
+
+        // 组心（没分组时就是它自己的中心）
+        var gx = c.baseCx
+        var gy = c.baseCy
+        if (members.size > 1) {
+            var l = Float.MAX_VALUE; var t = Float.MAX_VALUE
+            var r = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
+            for (g in members) {
+                l = min(l, g.baseCx - g.baseW / 2f); t = min(t, g.baseCy - g.baseH / 2f)
+                r = kotlin.math.max(r, g.baseCx + g.baseW / 2f)
+                b = kotlin.math.max(b, g.baseCy + g.baseH / 2f)
+            }
+            gx = (l + r) / 2f
+            gy = (t + b) / 2f
+        }
+
+        for (g in members) {
             if (g.baseW <= 0f || g.baseH <= 0f) continue
             val w = (g.baseW * k).coerceAtLeast(dp(20f))
             val h = (g.baseH * k).coerceAtLeast(dp(20f))
-            val cx = g.rect.centerX()
-            val cy = g.rect.centerY()
+            // 中心相对组心的偏移也乘 k —— 组越大，键与键之间越开
+            val cx = gx + (g.baseCx - gx) * k
+            val cy = gy + (g.baseCy - gy) * k
             g.rect.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f)
             syncCenter(g)
         }
+
+        // 放大后整组可能顶出屏幕（尤其贴着右/上边的那几个键），整组平移回来
+        if (viewW > 0 && viewH > 0) {
+            var l = Float.MAX_VALUE; var t = Float.MAX_VALUE
+            var r = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
+            for (g in members) {
+                l = min(l, g.rect.left); t = min(t, g.rect.top)
+                r = kotlin.math.max(r, g.rect.right); b = kotlin.math.max(b, g.rect.bottom)
+            }
+            var sx = 0f
+            var sy = 0f
+            if (l < 0f) sx = -l
+            if (r > viewW) sx = min(sx, viewW - r)
+            if (t < 0f) sy = -t
+            if (b > viewH) sy = min(sy, viewH - b)
+            if (sx != 0f || sy != 0f) {
+                for (g in members) {
+                    g.rect.offset(sx, sy)
+                    g.baseCx += sx
+                    g.baseCy += sy
+                    syncCenter(g)
+                }
+            }
+        }
+        // 缩放后整组（按几何中心）吸回网格，保证它仍然落在交叉点上
+        if (editMode) snapGroupToGrid(c)
+
         invalidate()
     }
 
@@ -414,9 +695,9 @@ class GamepadView @JvmOverloads constructor(
         var bestArea = Float.MAX_VALUE
         for (c in controls) {
             if (c.key.isEmpty()) continue
-            val hit = if (c.kind == Kind.STICK || c.kind == Kind.PAD) {
-                hypot(x - c.cx, y - c.cy) <= c.r * 1.15f || c.rect.contains(x, y)
-            } else {
+            // 摇杆占的是整半屏，不参与拖拽/缩放（拖它等于拖整块背景）
+            if (c.kind == Kind.STICK || c.kind == Kind.PAD) continue
+            val hit = run {
                 val t = RectF(c.rect)
                 t.inset(-dp(6f), -dp(6f))
                 t.contains(x, y)
@@ -430,7 +711,29 @@ class GamepadView @JvmOverloads constructor(
     }
 
     /**
-     * 编辑态的手势：点一下选中（并把大小滑条的数值交出去），按住拖着走位。
+     * 网格以**屏幕中线**为原点铺开（不是从左上角 0 开始铺）。
+     * 理由：手柄层在 x = 屏宽/2 处画了一条「左右两半」的分界线，
+     * 如果网格从 0 开始铺，这条线正好落在格子中间 —— 布局模式里就会看到
+     * 分界线和它旁边那条网格线挨在一起，像两条线。以中线为原点，分界线本身就是一条网格线。
+     */
+    private fun gridOriginX(): Float = viewW / 2f
+    private fun gridOriginY(): Float = viewH / 2f
+
+    /** 网格步长：短边 20 等分（20×20 格），保证格子是正方形 */
+    private fun gridStep(): Float {
+        if (viewW <= 0 || viewH <= 0) return 0f
+        return (min(viewW, viewH) / 20f).coerceAtLeast(dp(12f))
+    }
+
+    /** 把一个坐标吸到最近的网格线（原点在屏幕中线，所以减掉原点再取整） */
+    private fun snapToGrid(v: Float, origin: Float): Float {
+        val step = gridStep()
+        if (step <= 0f) return v
+        return origin + Math.round((v - origin) / step) * step
+    }
+
+    /**
+     * 编辑态的手势：点一下选中（并把大小滑条的数值交出去），按住拖着走位（中心吸附网格）。
      * 缩放交给下方滑条，所以这里不再处理双指 —— 拖动时手抖多落一根手指也不会突然变大变小。
      */
     private fun editTouch(e: MotionEvent): Boolean {
@@ -439,8 +742,10 @@ class GamepadView @JvmOverloads constructor(
                 val c = pickEditable(e.getX(), e.getY())
                 selected = c
                 if (c != null) {
-                    dragDx = e.getX() - c.rect.centerX()
-                    dragDy = e.getY() - c.rect.centerY()
+                    // 抓手记在「整组的几何中心」上：成组的东西按整块中心吸附，单键就是它自己
+                    val cur = snapTargetCenter(c)
+                    dragDx = e.getX() - cur[0]
+                    dragDy = e.getY() - cur[1]
                 }
                 // 点空白 = 取消选中，滑条跟着收起来
                 onSelectionChanged?.invoke(if (c == null) -1f else selectedScale())
@@ -449,10 +754,21 @@ class GamepadView @JvmOverloads constructor(
 
             MotionEvent.ACTION_MOVE -> {
                 val c = selected ?: return true
-                val dx = (e.getX() - dragDx) - c.rect.centerX()
-                val dy = (e.getY() - dragDy) - c.rect.centerY()
+                // 目标位置先吸附到网格交叉点，再按差值整体平移（按整组中心算）
+                val cur = snapTargetCenter(c)
+                val tx = snapToGrid((e.getX() - dragDx).coerceIn(0f, viewW.toFloat()), gridOriginX())
+                val ty = snapToGrid((e.getY() - dragDy).coerceIn(0f, viewH.toFloat()), gridOriginY())
+                val dx = tx - cur[0]
+                val dy = ty - cur[1]
+                if (debugEdit) {
+                    android.util.Log.i("PAD", "edit move key=${c.key} center=" + cur[0] + "," + cur[1]
+                        + " target=" + tx + "," + ty + " d=" + dx + "," + dy)
+                }
                 for (g in groupOf(c)) {
                     g.rect.offset(dx, dy)
+                    // 默认位置也跟着挪，否则缩放时会「弹回」原位
+                    g.baseCx += dx
+                    g.baseCy += dy
                     syncCenter(g)
                 }
                 invalidate()
@@ -465,6 +781,13 @@ class GamepadView @JvmOverloads constructor(
         return true
     }
 
+    /** 一个控件（或它那一组）当前占的外接框 */
+    private fun groupBox(c: Control): RectF {
+        val box = RectF(c.rect)
+        for (g in groupOf(c)) box.union(g.rect)
+        return box
+    }
+
     // ---------- 画 ----------
 
     override fun onDraw(canvas: Canvas) {
@@ -474,15 +797,24 @@ class GamepadView @JvmOverloads constructor(
             postInvalidateDelayed(40)
         }
 
+        // 左右各半：中间一条很淡的分割线，告诉手指「这边是左摇杆，那边是视角」
+        stroke.color = 0x1AFFFFFF
+        stroke.strokeWidth = dp(1f)
+        canvas.drawLine(viewW / 2f, dp(8f), viewW / 2f, viewH - dp(8f), stroke)
+        stroke.strokeWidth = dp(1.4f)
+
+        val dpad = controls.filter { it.group == "DPAD" }
         for (c in controls) {
             when (c.kind) {
-                Kind.STICK -> drawStick(canvas, c)
-                Kind.PAD -> drawPad(canvas, c)
-                Kind.BUTTON -> drawButton(canvas, c)
+                // 两个摇杆平时什么都不画，按下去才在落点长出来
+                Kind.STICK, Kind.PAD -> if (c.pointerId >= 0) drawStick(canvas, c)
+                // 十字键的四个方向拼成一个整体画（分四块画会在中间叠出接缝）
+                Kind.BUTTON -> if (c.group != "DPAD") drawButton(canvas, c)
                 Kind.TRIGGER -> drawTrigger(canvas, c)
                 Kind.DPAD -> {}
             }
         }
+        if (dpad.isNotEmpty()) drawDpad(canvas, dpad)
         if (editMode) drawEditOverlay(canvas)
     }
 
@@ -491,11 +823,45 @@ class GamepadView @JvmOverloads constructor(
      * 写在框里会和按键本来的字（A/B/X/Y、方向箭头）糊在一起。
      * 十字键的四个方向归成一组，只写一次组名「DPAD」。
      */
+    /**
+     * 编辑态：先铺一层网格，所有控件的中心都吸附到网格交叉点上 ——
+     * 手工拖很难让两个键真的对齐，吸附之后「差一点点」就没有了。
+     */
     private fun drawEditOverlay(canvas: Canvas) {
+        // 网格：短边 20 等分，方格是正方形；原点在屏幕中线（和左右分界线重合）
+        val step = gridStep()
+        if (step > 0f) {
+            stroke.color = 0x14FFFFFF
+            stroke.strokeWidth = dp(1f)
+            val ox = gridOriginX()
+            val oy = gridOriginY()
+            // 从中线往两边铺，中线那条线一定存在（就是左右分界线本身）
+            var k = 0
+            while (ox + k * step < viewW - 1f || ox - k * step > 0f) {
+                val xr = ox + k * step
+                val xl = ox - k * step
+                if (xr < viewW - 1f) canvas.drawLine(xr, 0f, xr, viewH.toFloat(), stroke)
+                if (k > 0 && xl > 0f) canvas.drawLine(xl, 0f, xl, viewH.toFloat(), stroke)
+                k++
+                if (k > 400) break
+            }
+            k = 0
+            while (oy + k * step < viewH - 1f || oy - k * step > 0f) {
+                val yb = oy + k * step
+                val yt = oy - k * step
+                if (yb < viewH - 1f) canvas.drawLine(0f, yb, viewW.toFloat(), yb, stroke)
+                if (k > 0 && yt > 0f) canvas.drawLine(0f, yt, viewW.toFloat(), yt, stroke)
+                k++
+                if (k > 400) break
+            }
+            stroke.strokeWidth = dp(1.4f)
+        }
+
         text.textSize = dp(10f)
         val named = HashSet<String>()
         for (c in controls) {
             if (c.key.isEmpty()) continue
+            if (c.kind == Kind.STICK || c.kind == Kind.PAD) continue
             val sel = if (c.group.isEmpty()) c === selected else selected?.group == c.group
             dash.color = if (sel) accent else 0x66FFFFFF
             dash.strokeWidth = dp(if (sel) 2.4f else 1.2f)
@@ -527,8 +893,12 @@ class GamepadView @JvmOverloads constructor(
         canvas.drawText("拖动摆放 · 点一下用下方滑条调大小", viewW / 2f, dp(20f), text)
     }
 
+    /**
+     * 摇杆：只在按着的时候画 —— 圈在手指落点上，帽子按拨动方向偏出去，推过头圈会跟着走。
+     * 左右两个摇杆画法一样，区别只有死区和手感曲线（见 updateStick）。
+     */
     private fun drawStick(canvas: Canvas, c: Control) {
-        fill.color = if (c.pointerId >= 0) 0x33FFFFFF else 0x14FFFFFF
+        fill.color = 0x22FFFFFF
         canvas.drawCircle(c.cx, c.cy, c.r, fill)
         stroke.color = if (feedback > 0f) withAlpha(accent, (60 + 195 * feedback).toInt()) else idleStroke
         canvas.drawCircle(c.cx, c.cy, c.r, stroke)
@@ -536,49 +906,58 @@ class GamepadView @JvmOverloads constructor(
         // 摇杆帽：跟着手指走，最多到半径的 60%
         val kx = c.cx + c.nx * c.r * 0.60f
         val ky = c.cy + c.ny * c.r * 0.60f
-        fill.color = if (c.pointerId >= 0) hotFill else 0x33FFFFFF
+        fill.color = hotFill
         canvas.drawCircle(kx, ky, c.r * 0.42f, fill)
-        stroke.color = if (c.pointerId >= 0) hotStroke else idleStroke
+        stroke.color = hotStroke
         canvas.drawCircle(kx, ky, c.r * 0.42f, stroke)
     }
 
     /**
-     * 触摸板：一块圆角区域，按下去的地方就是摇杆中心，往哪儿滑就往哪儿拨，松手回中。
-     * 比起固定摇杆，好处是不用瞄着那个圈按 —— 右下角随手一放就能调视角，
-     * 而且滑多远能自己控制：小位移是微调，滑满一个半径就是拨到底。
+     * 十字键：四个方向先并成一个「十」字整体再画 —— 分成四块圆角矩形画，
+     * 中间那块会互相压出四道接缝，看着像四个键挤在一起（之前就是这样）。
+     * 按下哪个方向，就在这个整体上把那一臂填成高亮色，边缘仍由整块的描边收口。
      */
-    private fun drawPad(canvas: Canvas, c: Control) {
-        val rad = dp(16f)
-        fill.color = 0x0DFFFFFF
-        canvas.drawRoundRect(c.rect, rad, rad, fill)
-        stroke.color = if (c.pointerId >= 0) withAlpha(accent, 130) else idleStroke
-        canvas.drawRoundRect(c.rect, rad, rad, stroke)
+    private fun drawDpad(canvas: Canvas, members: List<Control>) {
+        val up = members.firstOrNull { it.label == "▲" } ?: return
+        val down = members.firstOrNull { it.label == "▼" } ?: return
+        val left = members.firstOrNull { it.label == "◀" } ?: return
+        val right = members.firstOrNull { it.label == "▶" } ?: return
 
-        if (c.pointerId < 0) {
-            text.color = 0x59FFFFFF
-            text.textSize = min(c.rect.width(), c.rect.height()) * 0.085f
-            canvas.drawText(
-                "右摇杆触摸板 · 按住滑动",
-                c.rect.centerX(),
-                c.rect.centerY() + text.textSize * 0.36f,
-                text,
-            )
-            return
+        val rad = dp(10f)
+        // 横臂 = 左 ∪ 右，竖臂 = 上 ∪ 下；两条臂在中心重叠，用 union 合成一个轮廓
+        val hor = android.graphics.Path().apply {
+            addRoundRect(RectF(left.rect.left, left.rect.top, right.rect.right, left.rect.bottom),
+                rad, rad, android.graphics.Path.Direction.CW)
+        }
+        val ver = android.graphics.Path().apply {
+            addRoundRect(RectF(up.rect.left, up.rect.top, down.rect.right, down.rect.bottom),
+                rad, rad, android.graphics.Path.Direction.CW)
+        }
+        val cross = android.graphics.Path().apply { op(hor, ver, android.graphics.Path.Op.UNION) }
+
+        fill.color = idleFill
+        canvas.drawPath(cross, fill)
+
+        // 按下的那一臂在里面填高亮（裁剪到整块十字里，不会画到轮廓外面）
+        for (c in members) {
+            if (!c.pressed) continue
+            canvas.save()
+            canvas.clipPath(cross)
+            fill.color = hotFill
+            canvas.drawRoundRect(c.rect, rad, rad, fill)
+            canvas.restore()
         }
 
-        // 基准圈：告诉手指「拨到底大概要走这么远」
-        stroke.color = withAlpha(accent, 90)
-        canvas.drawCircle(c.cx, c.cy, c.r, stroke)
+        stroke.color = idleStroke
+        canvas.drawPath(cross, stroke)
 
-        // 摇杆帽在「手指相对按下点」的位移上，最多到半径
-        val kx = c.cx + c.nx * c.r
-        val ky = c.cy + c.ny * c.r
-        stroke.color = withAlpha(accent, 160)
-        canvas.drawLine(c.cx, c.cy, kx, ky, stroke)
-        fill.color = hotFill
-        canvas.drawCircle(kx, ky, c.r * 0.38f, fill)
-        stroke.color = hotStroke
-        canvas.drawCircle(kx, ky, c.r * 0.38f, stroke)
+        // 四个方向箭头（字号按一条臂的宽度收着，别糊到中心去）
+        text.textSize = min(up.rect.width(), left.rect.height()) * 0.38f
+        for (c in members) {
+            text.color = if (c.pressed) Color.WHITE else 0xCCFFFFFF.toInt()
+            canvas.drawText(c.label, c.rect.centerX(),
+                c.rect.centerY() + text.textSize * 0.36f, text)
+        }
     }
 
     private fun drawButton(canvas: Canvas, c: Control) {
@@ -642,15 +1021,11 @@ class GamepadView @JvmOverloads constructor(
                 for (i in 0 until e.pointerCount) {
                     val id = e.getPointerId(i)
                     val c = owner(id) ?: continue
-                    if (c.kind == Kind.STICK) {
+                    if (c.kind == Kind.STICK || c.kind == Kind.PAD) {
                         updateStick(c, e.getX(i), e.getY(i))
-                    } else if (c.kind == Kind.PAD) {
-                        updatePad(c, e.getX(i), e.getY(i))
                     } else if (c.kind == Kind.TRIGGER) {
-                        // 扳机是模拟量：手指在条上越靠上，压得越深
-                        val v = ((c.rect.bottom - e.getY(i)) / c.rect.height()).coerceIn(0f, 1f)
-                        c.value = v
-                        emit()
+                        // 扳机是「按下就到底」，滑动不再改它（滑出去也不会误松）
+                        if (!c.pressed) { c.pressed = true; c.value = 1f; emit() }
                     }
                 }
             }
@@ -662,7 +1037,8 @@ class GamepadView @JvmOverloads constructor(
                     c.pointerId = -1
                     if (c.kind == Kind.STICK || c.kind == Kind.PAD) {
                         c.nx = 0f; c.ny = 0f
-                        if (c.kind == Kind.PAD) { c.cx = c.rect.centerX(); c.cy = c.rect.centerY() }
+                        // 松手回到布局位置：摇杆中心可能跟着手指飘走过
+                        c.cx = c.rect.centerX(); c.cy = c.rect.centerY()
                     } else if (c.kind == Kind.TRIGGER) {
                         c.value = 0f; c.pressed = false
                     } else {
@@ -678,38 +1054,55 @@ class GamepadView @JvmOverloads constructor(
 
     private fun owner(id: Int): Control? = controls.firstOrNull { it.pointerId == id }
 
+    /**
+     * 十字键的命中判定：在整块十字范围内，按「相对中心的主方向」取一条臂。
+     * 用一个一个矩形去判的话，中心那一小块四个方向都算命中，谁排前面谁赢，手感是错的。
+     */
+    private fun hitDpad(x: Float, y: Float): Control? {
+        val members = controls.filter { it.group == "DPAD" }
+        if (members.isEmpty()) return null
+        val box = RectF(members[0].rect)
+        for (m in members) box.union(m.rect)
+        if (!box.contains(x, y)) return null
+        val dx = x - box.centerX()
+        val dy = y - box.centerY()
+        val label = if (abs(dx) > abs(dy)) {
+            if (dx > 0f) "▶" else "◀"
+        } else {
+            if (dy > 0f) "▼" else "▲"
+        }
+        return members.firstOrNull { it.label == label }
+    }
+
     private fun grab(x: Float, y: Float, id: Int) {
-        // 先找按钮（区域小、要求精确），再找摇杆（区域大、按中了就吃住）
+        // 顺序有讲究：先按钮/扳机（区域小、要求精确），再十字键，最后左右两块摇杆区域（整半屏，随便按）
         var hit: Control? = null
         for (c in controls) {
-            if (c.kind == Kind.BUTTON || c.kind == Kind.TRIGGER) {
+            if ((c.kind == Kind.BUTTON && c.group != "DPAD") || c.kind == Kind.TRIGGER) {
                 if (c.rect.contains(x, y)) { hit = c; break }
             }
         }
+        if (hit == null) hit = hitDpad(x, y)
         if (hit == null) {
             for (c in controls) {
-                if (c.kind == Kind.STICK && hypot(x - c.cx, y - c.cy) <= c.r * 1.15f) { hit = c; break }
-            }
-        }
-        if (hit == null) {
-            for (c in controls) {
-                if (c.kind == Kind.PAD && c.rect.contains(x, y)) { hit = c; break }
+                if ((c.kind == Kind.STICK || c.kind == Kind.PAD) && c.rect.contains(x, y)) { hit = c; break }
             }
         }
         val c = hit ?: return
         c.pointerId = id
-        if (c.kind == Kind.STICK) {
-            updateStick(c, x, y)
-        } else if (c.kind == Kind.PAD) {
-            // 手指落在哪，哪就是中心：这一下只把基准点挪过去，摇杆还是回中的
+        if (c.kind == Kind.STICK || c.kind == Kind.PAD) {
+            // 手指落在哪，摇杆中心就在哪 —— 不用瞄着某个圈按，半屏里随便摸
             c.cx = x
             c.cy = y
             c.nx = 0f
             c.ny = 0f
+            c.pressed = true
             emit()
         } else if (c.kind == Kind.TRIGGER) {
+            // 手机上按扳机就是「按下去」：一碰就到底，松手回 0。
+            // 以前按手指在条上的高度算模拟量，手指落在条的下半截就几乎没输出，点了像没反应。
             c.pressed = true
-            c.value = ((c.rect.bottom - y) / c.rect.height()).coerceIn(0f, 1f)
+            c.value = 1f
             emit()
         } else {
             c.pressed = true
@@ -718,37 +1111,38 @@ class GamepadView @JvmOverloads constructor(
     }
 
     private fun updateStick(c: Control, x: Float, y: Float) {
-        var dx = (x - c.cx) / c.r
-        var dy = (y - c.cy) / c.r
-        val len = hypot(dx, dy)
-        if (len > 1f) { dx /= len; dy /= len }
-        // 死区：小抖动不算操作，但出了死区要平滑地回到 0，不能跳
-        val mag = hypot(dx, dy)
-        if (mag < DEADZONE) {
-            c.nx = 0f; c.ny = 0f
-        } else {
-            val scaled = (mag - DEADZONE) / (1f - DEADZONE)
-            c.nx = dx / mag * scaled
-            c.ny = dy / mag * scaled
+        // 摇杆中心跟着手指走：推出去超过一个半径之后，基准点顺着手指方向挪，
+        // 摇杆帽就被「钉」在圈边上（一直是拨到底），既能一直推着跑，往回拉又能立刻反向 ——
+        // 固定中心的摇杆滑到边就没法再往前，手指还会顶出圈外。
+        var dx = x - c.cx
+        var dy = y - c.cy
+        val dist = hypot(dx, dy)
+        if (dist > c.r) {
+            val keep = c.r / dist
+            c.cx += dx * (1f - keep)
+            c.cy += dy * (1f - keep)
+            // 别让中心飘出画面（留一点边，圈不至于半个跑出去）
+            val m = c.r * 0.4f
+            c.cx = c.cx.coerceIn(m, (viewW - m).coerceAtLeast(m))
+            c.cy = c.cy.coerceIn(m, (viewH - m).coerceAtLeast(m))
+            dx = x - c.cx
+            dy = y - c.cy
         }
-        emit()
-    }
-
-    private fun updatePad(c: Control, x: Float, y: Float) {
-        var dx = (x - c.cx) / c.r
-        var dy = (y - c.cy) / c.r
-        val len = hypot(dx, dy)
-        if (len > 1f) { dx /= len; dy /= len }
-        val mag = hypot(dx, dy)
-        if (mag < PAD_DEADZONE) {
+        var ux = dx / c.r
+        var uy = dy / c.r
+        val len = hypot(ux, uy)
+        if (len > 1f) { ux /= len; uy /= len }
+        // 死区：小抖动不算操作，但出了死区要平滑地回到 0，不能跳。
+        // 右边是调视角，死区给小一点、曲线前段更细（smoothstep），微调才跟手。
+        val dead = if (c.kind == Kind.PAD) PAD_DEADZONE else DEADZONE
+        val mag = hypot(ux, uy)
+        if (mag < dead) {
             c.nx = 0f; c.ny = 0f
         } else {
-            // 出了死区先重标定，再过一道 smoothstep：中心附近细，外圈照样能拨满 ——
-            // 调视角要的是「按住一点点能慢慢转，按住很多能快转」
-            val scaled = (mag - PAD_DEADZONE) / (1f - PAD_DEADZONE)
-            val shaped = scaled * scaled * (3f - 2f * scaled)
-            c.nx = dx / mag * shaped
-            c.ny = dy / mag * shaped
+            var scaled = (mag - dead) / (1f - dead)
+            if (c.kind == Kind.PAD) scaled = scaled * scaled * (3f - 2f * scaled)
+            c.nx = ux / mag * scaled
+            c.ny = uy / mag * scaled
         }
         emit()
     }
@@ -758,6 +1152,12 @@ class GamepadView @JvmOverloads constructor(
         for (c in controls) if (c.kind == Kind.BUTTON && c.pressed) buttons = buttons or c.bit
         val lt = (triggerValue("LT") * 255).toInt()
         val rt = (triggerValue("RT") * 255).toInt()
+        if (debugEmit) {
+            android.util.Log.i("PAD", String.format(java.util.Locale.US,
+                "emit b=%d lx=%d ly=%d ls(%.0f,%.0f) nx=%.2f ny=%.2f",
+                buttons, (lstick.nx * 32767).toInt(), (-lstick.ny * 32767).toInt(),
+                lstick.cx, lstick.cy, lstick.nx, lstick.ny))
+        }
         listener?.onPad(
             buttons,
             (lstick.nx * 32767).toInt(),
@@ -779,9 +1179,35 @@ class GamepadView @JvmOverloads constructor(
             c.value = 0f
             c.nx = 0f
             c.ny = 0f
-            if (c.kind == Kind.PAD) { c.cx = c.rect.centerX(); c.cy = c.rect.centerY() }
+            if (c.kind == Kind.PAD || c.kind == Kind.STICK) { c.cx = c.rect.centerX(); c.cy = c.rect.centerY() }
         }
         emit()
         invalidate()
+    }
+
+    /** 调试用：任意控件当前的圆心和半径（"cx,cy,r"），布局被改过时也照样准 */
+    fun centerOf(key: String): String {
+        val c = controls.firstOrNull { it.key == key } ?: return "none"
+        return String.format(java.util.Locale.US, "%.0f,%.0f,%.0f", c.rect.centerX(), c.rect.centerY(), c.r)
+    }
+
+    /** 调试用：网格步长 */
+    fun gridStepForDebug(): Float = gridStep()
+
+    /** 调试用：所有控件中心（"KEY:x,y;KEY:x,y;…"），用来检查是不是都落在网格交叉点上 */
+    fun dumpCenters(): String {
+        val sb = StringBuilder()
+        for (c in controls) {
+            if (c.key.isEmpty()) continue
+            if (sb.isNotEmpty()) sb.append(';')
+            sb.append(c.key).append(':').append(Math.round(c.rect.centerX())).append(',')
+                .append(Math.round(c.rect.centerY()))
+        }
+        return sb.toString()
+    }
+
+    /** 调试用：左摇杆当前的圆心和半径（"cx,cy,r"）；布局被改过时也照样准 */    fun stickCenter(): String {
+        val c = controls.firstOrNull { it.key == "LS" } ?: return "none"
+        return String.format(java.util.Locale.US, "%.0f,%.0f,%.0f", c.cx, c.cy, c.r)
     }
 }

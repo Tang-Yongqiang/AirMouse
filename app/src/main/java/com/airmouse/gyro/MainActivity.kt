@@ -45,6 +45,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -169,7 +170,12 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
 
         // 手柄层的每一次状态变化都整帧发出去（GamepadView 已经做过去重，只在不重复变化时回调）
         padView.listener = GamepadView.Listener { buttons, lx, ly, rx, ry, lt, rt ->
-            if (enabled && mode == Prefs.MODE_PAD) net.sendPad(buttons, lx, ly, rx, ry, lt, rt)
+            if (enabled && mode == Prefs.MODE_PAD) {
+                net.sendPad(buttons, lx, ly, rx, ry, lt, rt)
+                if (padView.debugEmit) Diag.log("PAD", "listener 发出 lx=$lx ly=$ly")
+            } else if (padView.debugEmit) {
+                Diag.warn("PAD", "listener 被拦下：enabled=$enabled mode=$mode")
+            }
         }
         padExit.setOnClickListener {
             Diag.log("PAD", "点到「退出」")
@@ -295,6 +301,36 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             }, 3000)
         }
         checkUpdateOnLaunch()
+
+        // 调试用：--ez padsim true 用合成 MotionEvent 走一遍「左摇杆跟手」：
+        // 在摇杆位置按下 → 一路往左上拖到远超半径 → 停一会儿（留时间截图/读 xslots）→ 松手。
+        // HyperOS 拦 adb 注入触摸，只能靠应用内自己派事件来验这段逻辑。
+        if (intent?.getBooleanExtra("padsim", false) == true) {
+            main.postDelayed({ simulateStickDrag() }, 2500)
+        }
+        // 调试用：--ez padsim2 true 合成一次「右半屏触摸板」滑动，验这块区域真的吃得住
+        if (intent?.getBooleanExtra("padsim2", false) == true) {
+            main.postDelayed({ simulatePadDrag() }, 2500)
+        }
+        // 调试用：--ez dpadsim true 按住十字键的右臂，验整块十字的命中判定和高亮
+        if (intent?.getBooleanExtra("dpadsim", false) == true) {
+            main.postDelayed({ simulateDpadRight() }, 2500)
+        }
+        // 调试用：--ez dumplayout true 把当前手柄布局打到 logcat（用来把手上调好的布局固化成默认值）
+        if (intent?.getBooleanExtra("dumplayout", false) == true) {
+            main.postDelayed({
+                Diag.log("PAD", "layout=" + padView.exportLayout())
+                Diag.log("PAD", "layoutview w=" + padView.width + " h=" + padView.height)
+            }, 2400)
+        }
+        // 调试用：--ez gridsim true 进编辑态后把 A 键拖一段，验吸附是否真的落在网格交叉点
+        if (intent?.getBooleanExtra("gridsim", false) == true) {
+            main.postDelayed({ simulateGridDrag() }, 1800)
+        }
+        // 调试用：--es trigsim LT|RT 按住对应扳机，验这条通路（含视觉填充）
+        intent?.getStringExtra("trigsim")?.let { label ->
+            main.postDelayed({ simulateTrigger(label) }, 2500)
+        }
 
         // 调试用：--ez layoutedit true 直接进布局编辑态（HyperOS 点不了「布局」按钮，靠它看效果）
         if (intent?.getBooleanExtra("layoutedit", false) == true) {
@@ -514,9 +550,14 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
     private fun applyWindowInsets() {
         val root = findViewById<View>(R.id.root)
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
-            v.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
+            if (enabled && mode == Prefs.MODE_PAD) {
+                // 手柄模式要铺满整块屏：刘海那侧的 inset 也不让，否则边上留一条底色（白边）
+                v.setPadding(0, 0, 0, 0)
+            } else {
+                val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+                val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+                v.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
+            }
             insets
         }
         ViewCompat.requestApplyInsets(root)
@@ -1023,12 +1064,34 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         // 手柄层盖住之后，底下那套鼠标界面就该歇着：一是别透出来看着脏，二是省一次整屏重绘
         findViewById<View>(R.id.content).visibility = if (on) View.GONE else View.VISIBLE
 
+        // 手柄模式要真·全屏：隐藏状态栏/导航栏，并让内容铺到刘海下面。
+        // 不这么做的话，系统栏和刘海那几条会留着窗口底色 —— 就是看到的白边。
+        val ctl = WindowInsetsControllerCompat(window, window.decorView)
+        if (on) {
+            window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0xFF12161C.toInt()))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes = window.attributes.apply {
+                    layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
+            ctl.hide(WindowInsetsCompat.Type.systemBars())
+            ctl.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            ctl.show(WindowInsetsCompat.Type.systemBars())
+            window.setBackgroundDrawable(
+                android.graphics.drawable.ColorDrawable(ContextCompat.getColor(this, R.color.bg))
+            )
+        }
+
         val want = if (on) {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         } else {
             ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
         if (requestedOrientation != want) requestedOrientation = want
+        // 让上面那个 inset 监听按新模式重算一遍 padding（进出整屏切换要靠它）
+        ViewCompat.requestApplyInsets(findViewById(R.id.root))
 
         if (!on) {
             // 离开手柄层：把「按住的键」清掉。电脑端是按最后一次状态保持的，
@@ -1052,6 +1115,217 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         padEdit.text = if (on) "完成" else "布局"
         padReset.visibility = if (on) View.VISIBLE else View.GONE
         if (!on) padSizeBar.visibility = View.GONE
+    }
+
+    /**
+     * 调试用：合成一套触摸事件，验「左摇杆按哪儿算哪儿 + 推过头中心跟着走」。
+     * 先在摇杆位置按下，再往左上拖出约 1.5 个半径，保持几秒（留时间截图 / 读 xslots 看是否拨到底），
+     * 最后松手。HyperOS 不让 adb 注入触摸，只能由应用自己派事件。
+     */
+    private fun simulateStickDrag() {
+        if (mode != Prefs.MODE_PAD || padView.width == 0) {
+            Diag.warn("PAD", "padsim 跳过：mode=$mode width=" + padView.width)
+            return
+        }
+        val w = padView.width.toFloat()
+        val h = padView.height.toFloat()
+        // 从摇杆的真实圆心开始（布局被改过、或被上次跟手挪走了都能对上）
+        val info = padView.stickCenter().split(",")
+        val sx = info.getOrNull(0)?.toFloatOrNull() ?: (w * 0.155f)
+        val sy = info.getOrNull(1)?.toFloatOrNull() ?: (h * 0.32f)
+        val sr = info.getOrNull(2)?.toFloatOrNull() ?: (h * 0.145f)
+        val tx = sx - sr * 1.9f
+        val ty = sy - sr * 1.9f
+        val downAt = SystemClock.uptimeMillis()
+
+        fun fire(action: Int, x: Float, y: Float, offsetMs: Long): Boolean {
+            val ev = MotionEvent.obtain(downAt, downAt + offsetMs, action, x, y, 0)
+            val handled = padView.dispatchTouchEvent(ev)
+            ev.recycle()
+            return handled
+        }
+
+        Diag.log("PAD", "padsim 开始：enabled=$enabled mode=$mode 网=" + net.isConnected +
+                " listener=" + (padView.listener != null))
+        padView.debugEmit = true
+        net.debugSend = true
+        val ok = fire(MotionEvent.ACTION_DOWN, sx, sy, 0)
+        Diag.log("PAD", "padsim DOWN handled=" + ok)
+        val steps = 12
+        for (i in 1..steps) {
+            val f = i / steps.toFloat()
+            val delay = (i * 60).toLong()
+            main.postDelayed({
+                fire(MotionEvent.ACTION_MOVE, sx + (tx - sx) * f, sy + (ty - sy) * f, delay)
+            }, delay)
+        }
+        main.postDelayed({
+            Diag.log("PAD", String.format(java.util.Locale.US,
+                "padsim 推到底：起点 (%.0f,%.0f) 终点 (%.0f,%.0f)", sx, sy, tx, ty))
+        }, 800)
+        main.postDelayed({
+            fire(MotionEvent.ACTION_UP, tx, ty, 4200)
+            padView.debugEmit = false
+            net.debugSend = false
+            Diag.log("PAD", "padsim 松手")
+        }, 4200)
+    }
+
+    /**
+     * 调试用：编辑态里把 A 键拖一段（偏一点、不落在网格上），松手后打日志 ——
+     * 看 A 的中心是不是整数个网格步长，就知吸附有没有生效。
+     */
+    private fun simulateGridDrag() {
+        if (mode != Prefs.MODE_PAD || padView.width == 0) {
+            Diag.warn("PAD", "gridsim 跳过：mode=$mode")
+            return
+        }
+        setPadEditMode(true)
+        padView.debugEdit = true
+        main.postDelayed({
+            val info = padView.centerOf("A")
+            if (info == "none") { Diag.warn("PAD", "gridsim 找不到 A"); return@postDelayed }
+            val parts = info.split(",")
+            val cx = parts[0].toFloat()
+            val cy = parts[1].toFloat()
+            val at = SystemClock.uptimeMillis()
+
+            fun fire(action: Int, x: Float, y: Float, offsetMs: Long) {
+                val ev = MotionEvent.obtain(at, at + offsetMs, action, x, y, 0)
+                padView.dispatchTouchEvent(ev)
+                ev.recycle()
+            }
+
+            fire(MotionEvent.ACTION_DOWN, cx, cy, 0)
+            fire(MotionEvent.ACTION_MOVE, cx - 97f, cy + 63f, 300)
+            fire(MotionEvent.ACTION_UP, cx - 97f, cy + 63f, 600)
+            main.postDelayed({
+                val step = padView.gridStepForDebug()
+                val dump = padView.dumpCenters()
+                // 顺手把「谁没落在交叉点上」算出来：坐标除以步长最接近的整数，差值>2px 就算偏
+                val off = dump.split(';').mapNotNull { p ->
+                    val i = p.indexOf(':')
+                    if (i <= 0) return@mapNotNull null
+                    val nums = p.substring(i + 1).split(',')
+                    val x = nums[0].toFloatOrNull() ?: return@mapNotNull null
+                    val y = nums[1].toFloatOrNull() ?: return@mapNotNull null
+                    val ex = Math.abs(x - Math.round(x / step) * step)
+                    val ey = Math.abs(y - Math.round(y / step) * step)
+                    if (ex > 2f || ey > 2f) p.substring(0, i) + "(" + Math.round(ex) + "," + Math.round(ey) + ")" else null
+                }
+                Diag.log("PAD", "gridsim step=$step 全部=$dump 偏格=" + if (off.isEmpty()) "无" else off.joinToString(" "))
+            }, 900)
+        }, 900)
+    }
+
+    /**
+     * 调试用：按住左/右扳机（--es trigsim LT|RT）——
+     * 手指落在条的 1/4 高度处（扳机压到 75%），看电脑端 lt/rt 有没有跟着变。
+     */
+    private fun simulateTrigger(label: String) {
+        if (mode != Prefs.MODE_PAD || padView.width == 0) {
+            Diag.warn("PAD", "trigsim 跳过：mode=$mode width=" + padView.width)
+            return
+        }
+        val w = padView.width.toFloat()
+        val h = padView.height.toFloat()
+        val trigW = minOf(w, h) * 0.075f
+        val margin = resources.displayMetrics.density * 10f
+        val x = if (label == "LT") margin + trigW / 2f else w - margin - trigW / 2f
+        val y = h * 0.14f + h * 0.30f * 0.25f
+        val at = SystemClock.uptimeMillis()
+
+        fun fire(action: Int, offsetMs: Long) {
+            val ev = MotionEvent.obtain(at, at + offsetMs, action, x, y, 0)
+            padView.dispatchTouchEvent(ev)
+            ev.recycle()
+        }
+
+        net.debugSend = true
+        fire(MotionEvent.ACTION_DOWN, 0)
+        Diag.log("PAD", String.format(java.util.Locale.US, "trigsim 按住 %s (%.0f,%.0f)", label, x, y))
+        main.postDelayed({
+            fire(MotionEvent.ACTION_UP, 2600)
+            net.debugSend = false
+            Diag.log("PAD", "trigsim 松手")
+        }, 2600)
+    }
+
+    /**
+     * 调试用：按住十字键的右臂一会儿 —— 4 个方向共用一块十字，命中按「相对中心的主方向」算，
+     * 这里验的就是这条判定和那一段高亮。
+     */
+    private fun simulateDpadRight() {
+        if (mode != Prefs.MODE_PAD || padView.width == 0) {
+            Diag.warn("PAD", "dpadsim 跳过：mode=$mode width=" + padView.width)
+            return
+        }
+        val w = padView.width.toFloat()
+        val h = padView.height.toFloat()
+        // 十字键中心在 (0.305w, 0.72h)，一条臂长 = 短边 × 0.062（和 GamepadView 里一致）
+        val arm = minOf(w, h) * 0.062f
+        val sx = w * 0.305f + arm
+        val sy = h * 0.72f
+        val at = SystemClock.uptimeMillis()
+
+        fun fire(action: Int, offsetMs: Long) {
+            val ev = MotionEvent.obtain(at, at + offsetMs, action, sx, sy, 0)
+            padView.dispatchTouchEvent(ev)
+            ev.recycle()
+        }
+
+        net.debugSend = true
+        fire(MotionEvent.ACTION_DOWN, 0)
+        Diag.log("PAD", String.format(java.util.Locale.US,
+            "dpadsim 按住右臂 (%.0f,%.0f)", sx, sy))
+        main.postDelayed({
+            fire(MotionEvent.ACTION_UP, 2600)
+            net.debugSend = false
+            Diag.log("PAD", "dpadsim 松手")
+        }, 2600)
+    }
+
+    /**
+     * 调试用：合成一次「右半屏触摸板」滑动 —— 在板子中间按下、往右拖 1.2 个半径，
+     * 看电脑端 rx 有没有变成正数（顺便确认这块大区域确实归触摸板，没被别的控件抢走）。
+     */
+    private fun simulatePadDrag() {
+        if (mode != Prefs.MODE_PAD || padView.width == 0) {
+            Diag.warn("PAD", "padsim2 跳过：mode=$mode width=" + padView.width)
+            return
+        }
+        val w = padView.width.toFloat()
+        val h = padView.height.toFloat()
+        val sx = w * 0.72f
+        val sy = h * 0.74f
+        val tx = sx + w * 0.10f
+        val downAt = SystemClock.uptimeMillis()
+
+        fun fire(action: Int, x: Float, y: Float, offsetMs: Long) {
+            val ev = MotionEvent.obtain(downAt, downAt + offsetMs, action, x, y, 0)
+            padView.dispatchTouchEvent(ev)
+            ev.recycle()
+        }
+
+        padView.debugEmit = true
+        net.debugSend = true
+        fire(MotionEvent.ACTION_DOWN, sx, sy, 0)
+        val steps = 8
+        for (i in 1..steps) {
+            val f = i / steps.toFloat()
+            val delay = (i * 60).toLong()
+            main.postDelayed({ fire(MotionEvent.ACTION_MOVE, sx + (tx - sx) * f, sy, delay) }, delay)
+        }
+        main.postDelayed({
+            Diag.log("PAD", String.format(java.util.Locale.US,
+                "padsim2 推到底：起点 (%.0f,%.0f) 终点 (%.0f,%.0f)", sx, sy, tx, sy))
+        }, 700)
+        main.postDelayed({
+            fire(MotionEvent.ACTION_UP, tx, sy, 3600)
+            padView.debugEmit = false
+            net.debugSend = false
+            Diag.log("PAD", "padsim2 松手")
+        }, 3600)
     }
 
     // 滑条 0..100 ↔ 倍数 0.4..2.5（default = 1.00× 落在 29）
