@@ -449,6 +449,8 @@ namespace AirMouse
     internal sealed class MainForm : Form
     {
         private const int Port = 47777;
+        // 音频（麦克风 / 电脑声音）单独一个端口，见 AudioBridge.cs
+        private const int AudioPort = 47778;
 
         /// <summary>
         /// 协议版本。只要「手机端发来的指令写法」变了就 +1（手机端在 NetInput.PROTO 里对应）。
@@ -1305,7 +1307,42 @@ namespace AirMouse
             accept.IsBackground = true;
             accept.Start();
 
+            StartAudioListener();
             StartAdbWatch();
+        }
+
+        // 音频走单独一个口：不影响主控链路，鼠标/手柄照常
+        private static TcpListener _audioListener;
+        private void StartAudioListener()
+        {
+            try
+            {
+                _audioListener = new TcpListener(IPAddress.Any, AudioPort);
+                _audioListener.Start();
+                var t = new Thread(AudioAcceptLoop);
+                t.IsBackground = true;
+                t.Start();
+                Log.Write("  [i] 音频通道监听 0.0.0.0:" + AudioPort + "（麦克风 / 电脑声音）");
+            }
+            catch (Exception ex)
+            {
+                Log.Write("  [!] 音频端口 " + AudioPort + " 没起来：" + ex.Message + "（只有麦克风/媒体输出用不了，其它照常）");
+            }
+        }
+
+        private void AudioAcceptLoop()
+        {
+            while (_running)
+            {
+                try
+                {
+                    var c = _audioListener.AcceptTcpClient();
+                    var t = new Thread(() => AudioBridge.Handle(c));
+                    t.IsBackground = true;
+                    t.Start();
+                }
+                catch { if (!_running) return; Thread.Sleep(100); }
+            }
         }
 
         private static bool HasFirewallRule()
@@ -1403,6 +1440,11 @@ namespace AirMouse
         private static TcpClient _activeClient;
         // 记住上一条的地址：连接对象关掉之后就查不到 RemoteEndPoint 了，日志里会变成「?」
         private static string _activeRemote;
+        // 手柄模式下要主动往手机回东西（震动反馈），所以留一份流出引用
+        private static Stream _activeStream;
+        // 一条连接上可能同时有「读线程回 bye」和「驱动线程发震动」，写 socket 要互斥
+        private static readonly object WriteLock = new object();
+        private static bool _padFeedbackHooked;
         private static string SafeRemote(TcpClient c)
         {
             try { return ((IPEndPoint)c.Client.RemoteEndPoint).Address.ToString(); } catch { return "?"; }
@@ -1419,6 +1461,8 @@ namespace AirMouse
                 using (client)
                 using (var stream = client.GetStream())
                 {
+                    _activeStream = stream;
+                    HookPadFeedback();
                     // 千万不要设 ReceiveTimeout（曾经是 60000）：手机只要安静 60 秒
                     //（在看网页、慢慢打字、只是没动手机）就会抛 IOException 判断线，
                     // 表现就是「每隔一分钟断一次、状态一直闪」。真断线靠 TCP keepalive + 手机端自动重连兜底。
@@ -1466,9 +1510,33 @@ namespace AirMouse
                 UpdateClients(remote, false);
                 // 这条退出了就把槽位一起清掉：否则下一条连接会对着一个死 socket 发 bye，
                 // 日志还会冒出「接管，已让上一条（?）让位」这种假接管。
-                if (ReferenceEquals(_activeClient, client)) { _activeClient = null; _activeRemote = null; }
+                bool stillActive = ReferenceEquals(_activeClient, client);
+                if (stillActive) { _activeClient = null; _activeRemote = null; _activeStream = null; }
+                // 只有「真·没人连着」才拔手柄：被新手机顶掉时，新连接马上会重新插一只，
+                // 这里要是也拔，会把手柄跟着新连接一起闪断。
+                if (stillActive) VirtualPad.Shutdown("手机断开");
                 Log.Write("[-] 手机已断开 " + remote);
             }
+        }
+
+        // 手柄震动：ViGEmBus 在驱动线程回调，这里转成一行 JSON 发给手机（手机自己决定要不要震）
+        private static void HookPadFeedback()
+        {
+            lock (WriteLock)
+            {
+                if (_padFeedbackHooked) return;
+                _padFeedbackHooked = true;
+            }
+            VirtualPad.Vibration += (large, small) =>
+            {
+                var s = _activeStream;
+                if (s == null) return;
+                var bytes = Encoding.UTF8.GetBytes("{\"t\":\"v\",\"large\":" + large + ",\"small\":" + small + "}\n");
+                lock (WriteLock)
+                {
+                    try { s.Write(bytes, 0, bytes.Length); s.Flush(); } catch { }
+                }
+            };
         }
 
         private void UpdateClients(string remote, bool add)
@@ -1569,8 +1637,27 @@ namespace AirMouse
                 Log.Write("  text '" + text + "'");
                 Injector.Text(text);
             }
+            else if (t == "g")
+            {
+                // 手柄模式：一次报完整状态（按键位 + 两个摇杆 + 两个扳机），60Hz 左右
+                ushort b = (ushort)GetInt(msg, "b");
+                short lx = (short)clampShort(GetInt(msg, "lx"));
+                short ly = (short)clampShort(GetInt(msg, "ly"));
+                short rx = (short)clampShort(GetInt(msg, "rx"));
+                short ry = (short)clampShort(GetInt(msg, "ry"));
+                byte lt = (byte)clampByte(GetInt(msg, "lt"));
+                byte rt = (byte)clampByte(GetInt(msg, "rt"));
+                VirtualPad.Update(b, lx, ly, rx, ry, lt, rt);
+            }
+            else if (t == "gp")
+            {
+                VirtualPad.Shutdown("手机端退出手机柄");
+            }
             else Log.Write("  ? 未知指令：" + t);
         }
+
+        private static int clampShort(int v) { return v > 32767 ? 32767 : (v < -32768 ? -32768 : v); }
+        private static int clampByte(int v) { return v > 255 ? 255 : (v < 0 ? 0 : v); }
 
         private static int GetInt(Dictionary<string, object> m, string k, int def = 0)
         {
@@ -1655,8 +1742,13 @@ namespace AirMouse
                     {
                         if (known.Contains(s)) continue;
                         string r = RunCapture(adb, "-s " + s + " reverse tcp:" + Port + " tcp:" + Port);
-                        if (!string.IsNullOrEmpty(r) && !r.StartsWith("error"))
+                        // 成功时 adb 什么都不打印，所以「空输出」也算成功；
+                        // 之前这里要求 must 非空，结果已经映射过的口不会被补上音频口。
+                        bool ok = string.IsNullOrEmpty(r) || !r.StartsWith("error");
+                        if (ok)
                         {
+                            // 音频口也映射一份，否则 USB 模式下麦克风/媒体输出连不上
+                            RunCapture(adb, "-s " + s + " reverse tcp:" + AudioPort + " tcp:" + AudioPort);
                             Log.Write("[+] USB 通道已就绪 " + s + " -> 127.0.0.1:" + Port);
                             known.Add(s);
                         }

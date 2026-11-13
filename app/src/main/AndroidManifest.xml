@@ -25,6 +25,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- 手柄模式：电脑端把游戏的手柄震动转下来，这里震手机 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 手机当电脑麦克风（音频通道） -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <uses-feature
         android:name="android.hardware.bluetooth"
         android:required="false" />
@@ -41,7 +46,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="keyboardHidden|uiMode"
+            android:configChanges="keyboardHidden|uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
             android:exported="true"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">

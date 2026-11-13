@@ -1,4 +1,4 @@
-# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
+﻿# 一键发版：改版本号 → 编译 APK/EXE → 放进 releases/vX.Y → 改 update.json → 提交 → 打 tag → 推送 → 刷新 jsDelivr
 #
 # 用法（在仓库根目录）：
 #   .\publish.ps1 -AppVersion 1.1.0 -Notes "新增：…`n修复：…"
@@ -96,7 +96,10 @@ if (-not $ServerOnly) {
     if (-not $m.Success) { throw "在 app/build.gradle.kts 里找不到 versionCode" }
     $code = [int]$m.Groups[1].Value + 1
     $txt = [regex]::Replace($txt, 'versionCode\s*=\s*\d+', "versionCode = $code")
-    $txt = [regex]::Replace($txt, 'versionName\s*=\s*"[^"]*"', "versionName = `"$AppVersion`"")
+    # versionName 有两处：defaultConfig 里的正式版本号，以及下面 ?.let{} 里带 $it 后缀的那行。
+    # 必须分两处改 —— 一把梭会把 $it 抄到 let 块外面，Gradle 直接报 Unresolved reference: it。
+    $txt = [regex]::Replace($txt, "(?m)^(\s{8})versionName\s*=\s*`"[^`"]*`"", "`${1}versionName = `"$AppVersion`"")
+    $txt = [regex]::Replace($txt, "(?m)^(\s{12})versionName\s*=\s*`"[^`"]*`"", "`${1}versionName = `"$AppVersion`$it`"")
     [IO.File]::WriteAllText($gradleFile, $txt, (New-Object Text.UTF8Encoding($false)))
 }
 
@@ -136,8 +139,9 @@ $exeTmp = Join-Path $root 'dist\_server_new.exe'
 Remove-Item $exeTmp -Force -ErrorAction SilentlyContinue
 & $Csc /nologo /target:winexe /codepage:65001 /optimize+ /r:System.Web.Extensions.dll `
     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.CSharp.dll /r:System.IO.Compression.FileSystem.dll `
+    /r:"$root\dist\NAudio.dll" `
     /win32icon:"$root\pc\airmouse.ico" /win32manifest:"$root\pc\app.manifest" /out:"$exeTmp" `
-    "$root\pc\AirMouseServer.cs" "$root\pc\InjectorHost.cs" "$root\pc\AssemblyInfo.cs"
+    "$root\pc\AirMouseServer.cs" "$root\pc\VirtualPad.cs" "$root\pc\AudioBridge.cs" "$root\pc\InjectorHost.cs" "$root\pc\AssemblyInfo.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc 编译失败" }
 $copied = $false
 for ($i = 1; $i -le 15; $i++) {
@@ -154,10 +158,31 @@ $setupOut = Join-Path $root 'dist\AirMouseSetup.exe'
     /win32icon:"$root\pc\airmouse.ico" /win32manifest:"$root\pc\app.manifest" `
     /out:"$uninOut" "$root\pc\Setup.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc 编译卸载器失败" }
+$setupRes = @(
+    "/resource:`"$exeOut`",payload_server",
+    "/resource:`"$hookOut`",payload_hook",
+    "/resource:`"$uninOut`",payload_uninstall",
+    "/resource:`"$root\dist\NAudio.dll`",payload_naudio",
+    "/resource:`"$root\dist\ViGEmClient.dll`",payload_vigem"
+)
+# VB-Cable 安装包（麦克风要用）：缺了就少带一个内嵌资源，先警告但别把发版卡住
+$cableSrc = Join-Path $root 'pc\vendor\VBCABLE_Setup_x64.exe'
+if (Test-Path $cableSrc) {
+    $setupRes += "/resource:`"$cableSrc`",payload_cable"
+} else {
+    Write-Host "警告：没找到 $cableSrc，安装包不会自动装 VB-Cable" -ForegroundColor Yellow
+}
+# ViGEmBus 驱动（手柄模式要用）：同样缺了就警告
+$vigemBusSrc = Join-Path $root 'pc\vendor\ViGEmBus_1.22.0_x64_x86_arm64.exe'
+if (Test-Path $vigemBusSrc) {
+    $setupRes += "/resource:`"$vigemBusSrc`",payload_vigem_bus"
+} else {
+    Write-Host "警告：没找到 $vigemBusSrc，安装包不会自动装 ViGEmBus 驱动" -ForegroundColor Yellow
+}
 & $Csc /nologo /target:winexe /codepage:65001 /optimize+ `
     /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll `
     /win32icon:"$root\pc\airmouse.ico" /win32manifest:"$root\pc\app.manifest" `
-    /resource:"$exeOut",payload_server /resource:"$hookOut",payload_hook /resource:"$uninOut",payload_uninstall `
+    @setupRes `
     /out:"$setupOut" "$root\pc\Setup.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc 编译安装器失败" }
 if ($ServerOnly) {

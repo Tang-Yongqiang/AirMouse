@@ -68,6 +68,13 @@ class NetInput : InputSink {
     @Volatile
     var onKicked: ((reason: String) -> Unit)? = null
 
+    /**
+     * 手柄震动：电脑端读到虚拟手柄的震动包（游戏让手柄震）就发 `{"t":"v","large":..,"small":..}` 下来，
+     * 这里转给界面去震手机。在后台线程触发。
+     */
+    @Volatile
+    var onVibration: ((large: Int, small: Int) -> Unit)? = null
+
     /** 界面启动时填进来，握手时告诉电脑端「我这边是哪一版」 */
     @Volatile
     var appVersion: String = ""
@@ -316,16 +323,24 @@ class NetInput : InputSink {
         t.start()
     }
 
-    /** 电脑端下发的行：握手 hi（版本提醒）、让位 bye（被另一台手机接管） */
+    /** 电脑端下发的行：握手 hi（版本提醒）、让位 bye（被另一台手机接管）、v（手柄震动） */
     private fun handleServerLine(line: String) {
         try {
             val o = org.json.JSONObject(line)
             when (o.optString("t")) {
                 "bye" -> onServerBye(o.optString("reason", ""))
                 "hi" -> onServerHi(o)
+                "v" -> onServerVibration(o)
             }
         } catch (_: Exception) {
         }
+    }
+
+    private fun onServerVibration(o: org.json.JSONObject) {
+        val large = o.optInt("large", 0).coerceIn(0, 255)
+        val small = o.optInt("small", 0).coerceIn(0, 255)
+        if (large == 0 && small == 0) return
+        onVibration?.invoke(large, small)
     }
 
     private fun onServerHi(o: org.json.JSONObject) {
@@ -475,6 +490,35 @@ class NetInput : InputSink {
 
     override fun close() {
         stop()
+    }
+
+    // ---------------- 手柄 ----------------
+
+    /**
+     * 手柄的整帧状态。电脑端拿到之后原样塞进虚拟手柄的 XUSB_REPORT，
+     * 所以这里不做任何「动作」解释，只说「现在按着哪些键、摇杆在哪、扳机压多深」。
+     *
+     * 只在状态真的变了的时候调用（GamepadView 负责去重），不用定时重发：
+     * 电脑端那边是按「最后一次状态」保持的，不发就等于保持原样。
+     */
+    fun sendPad(buttons: Int, lx: Int, ly: Int, rx: Int, ry: Int, lt: Int, rt: Int) {
+        push(
+            JSONObject()
+                .put("t", "g")
+                .put("b", buttons)
+                .put("lx", lx.coerceIn(-32768, 32767))
+                .put("ly", ly.coerceIn(-32768, 32767))
+                .put("rx", rx.coerceIn(-32768, 32767))
+                .put("ry", ry.coerceIn(-32768, 32767))
+                .put("lt", lt.coerceIn(0, 255))
+                .put("rt", rt.coerceIn(0, 255))
+                .toString()
+        )
+    }
+
+    /** 退出手机柄：让电脑端把虚拟手柄拔掉，别在系统里留一个乱动的手柄 */
+    fun sendPadOff() {
+        push(JSONObject().put("t", "gp").toString())
     }
 
     private fun publish(s: State, msg: String) {

@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ActivityInfo
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
@@ -15,6 +16,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.util.Log
 import android.os.Looper
 import android.provider.Settings
@@ -52,6 +55,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
 
     companion object {
         private const val REQ_BT = 1001
+        private const val REQ_AUDIO = 1002
         private const val KEY_UI_ENABLED = "uiEnabled"
         private const val KEY_UI_GYRO = "uiGyro"
         private const val KEY_UI_GYRO_SUSPENDED = "uiGyroSuspended"
@@ -119,6 +123,17 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
     private lateinit var tvSens: TextView
     private lateinit var hintText: TextView
 
+    // 手柄模式：盖在最上面的那一层（自己画的手柄 + 右上角退出）
+    private lateinit var padLayer: android.widget.FrameLayout
+    private lateinit var padView: GamepadView
+    private lateinit var padExit: View
+    private lateinit var padEdit: android.widget.TextView
+    private lateinit var padReset: View
+    private lateinit var padSizeBar: View
+    private lateinit var padSizeSeek: SeekBar
+    private lateinit var padSizeLabel: android.widget.TextView
+    private var syncingSize = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         applyAppearance()
         super.onCreate(savedInstanceState)
@@ -148,6 +163,65 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         seekSens = findViewById(R.id.seekSens)
         tvSens = findViewById(R.id.tvSens)
         hintText = findViewById(R.id.hint)
+        padLayer = findViewById(R.id.padLayer)
+        padView = findViewById(R.id.padView)
+        padExit = findViewById(R.id.padExit)
+
+        // 手柄层的每一次状态变化都整帧发出去（GamepadView 已经做过去重，只在不重复变化时回调）
+        padView.listener = GamepadView.Listener { buttons, lx, ly, rx, ry, lt, rt ->
+            if (enabled && mode == Prefs.MODE_PAD) net.sendPad(buttons, lx, ly, rx, ry, lt, rt)
+        }
+        padExit.setOnClickListener {
+            Diag.log("PAD", "点到「退出」")
+            exitPadMode()
+        }
+
+        // 布局：进入编辑态以后可以拖动摆放；点中某个按键，底部出现滑条调大小；存进 Prefs 下次直接用
+        padEdit = findViewById(R.id.padEdit)
+        padReset = findViewById(R.id.padReset)
+        padSizeBar = findViewById(R.id.padSizeBar)
+        padSizeSeek = findViewById(R.id.padSizeSeek)
+        padSizeLabel = findViewById(R.id.padSizeLabel)
+        padView.importLayout(prefs.padLayout)
+        padView.onLayoutChanged = { s -> prefs.padLayout = s }
+        padEdit.setOnClickListener { setPadEditMode(!padView.editMode) }
+        padReset.setOnClickListener {
+            padView.resetLayout()
+            padSizeBar.visibility = View.GONE
+            toast("已恢复默认布局")
+        }
+
+        // 点中某个控件 → 显示滑条并把当前倍数摆上去；点空白 → 收起来
+        padView.onSelectionChanged = { scale ->
+            main.post {
+                if (scale <= 0f) {
+                    padSizeBar.visibility = View.GONE
+                } else {
+                    // 现读一次倍数：这个 post 是异步的，排队期间用户可能已经把滑条拖走了
+                    val s = padView.selectedScale()
+                    padSizeBar.visibility = View.VISIBLE
+                    syncingSize = true
+                    padSizeSeek.progress = scaleToProgress(s)
+                    padSizeLabel.text = "大小 " + fmtScale(s)
+                    syncingSize = false
+                }
+            }
+        }
+        padSizeSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                // 只有用户自己拖才算：回填进度时也会进这里，不挡住会把自己越拖越大
+                if (!fromUser || syncingSize) return
+                val s = progressToScale(progress)
+                padView.setSelectedScale(s)
+                padSizeLabel.text = "大小 " + fmtScale(s)
+            }
+
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+
+            override fun onStopTrackingTouch(sb: SeekBar?) {
+                prefs.padLayout = padView.exportLayout()
+            }
+        })
 
         hid = HidInput(this)
         hid.listener = this
@@ -178,6 +252,17 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             }
         }
 
+        // 手柄震动：电脑端读到虚拟手柄的震动包之后转下来，这里震一下手机，手柄层也跟着亮一下
+        net.onVibration = { large, small ->
+            main.post {
+                vibratePad(large, small)
+                padView.pulse()
+            }
+        }
+
+        // 音频通道的状态只进诊断日志：它是后台线程回调，不往界面上弹，免得刷屏打扰
+        AudioLink.onState = { what, text -> Diag.log("AUDIO", what + " " + text) }
+
         gyro = GyroEngine(this)
         gyro.listener = object : GyroEngine.Listener {
             override fun onMove(dx: Int, dy: Int) {
@@ -198,7 +283,66 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         requestBluetoothPermissions()
         applyMode()
         applyDebugConfig(intent)
+        // 调试用：--ez padtest true 免手点跑一遍手柄报文（HyperOS 拦 adb 注入点击，靠它验链路）
+        // 顺序：按 A → A 不放 + 左摇杆右上 + 左扳机踩一半 → 全部松手
+        if (intent?.getBooleanExtra("padtest", false) == true) {
+            main.postDelayed({
+                net.sendPad(GamepadView.BTN_A, 0, 0, 0, 0, 0, 0)
+                main.postDelayed({
+                    net.sendPad(GamepadView.BTN_A, 20000, -10000, 0, 0, 180, 0)
+                }, 700)
+                main.postDelayed({ net.sendPad(0, 0, 0, 0, 0, 0, 0) }, 1500)
+            }, 3000)
+        }
         checkUpdateOnLaunch()
+
+        // 调试用：--ez layoutedit true 直接进布局编辑态（HyperOS 点不了「布局」按钮，靠它看效果）
+        if (intent?.getBooleanExtra("layoutedit", false) == true) {
+            main.postDelayed({ if (mode == Prefs.MODE_PAD) setPadEditMode(true) }, 900)
+        }
+        // 调试用：--ez layoutreset true 清掉自定义布局，回到出厂位置
+        if (intent?.getBooleanExtra("layoutreset", false) == true) {
+            main.postDelayed({ padView.resetLayout() }, 900)
+        }
+        // 调试用：--es layoutpick A [--ez layoutgrow true] 模拟「点中 A 键」并把滑条拖到 1.6×，
+        // 用来验证滑条那条链路（HyperOS 拦 adb 注入点击，点不了真控件）
+        val pickKey = intent?.getStringExtra("layoutpick")
+        if (!pickKey.isNullOrEmpty()) {
+            main.postDelayed({
+                if (mode == Prefs.MODE_PAD) {
+                    setPadEditMode(true)
+                    padView.selectForEdit(pickKey)
+                    if (intent.getBooleanExtra("layoutgrow", false)) {
+                        padView.setSelectedScale(1.6f)
+                        padSizeSeek.progress = scaleToProgress(1.6f)
+                        padSizeLabel.text = "大小 " + fmtScale(1.6f)
+                        prefs.padLayout = padView.exportLayout()
+                    }
+                }
+            }, 1200)
+        }
+
+        // 调试用：--ez layouttest true 走一遍「导出 → 改 → 导入 → 再导出 → 存盘」，
+        // 验证布局存档这条链路（左摇杆右移 6%、A 键放大 1.3 倍），结果打到 logcat
+        if (intent?.getBooleanExtra("layouttest", false) == true) {
+            main.postDelayed({
+                val t = padView.exportLayout().split(';').joinToString(";") { part ->
+                    val i = part.indexOf(':')
+                    if (i <= 0) part else {
+                        val key = part.substring(0, i)
+                        val n = part.substring(i + 1).split(',').map { it.toFloat() }.toMutableList()
+                        when (key) {
+                            "LS" -> n[0] += 0.06f
+                            "A" -> { n[2] *= 1.3f; n[3] *= 1.3f }
+                        }
+                        key + ":" + n.joinToString(",")
+                    }
+                }
+                padView.importLayout(t)
+                prefs.padLayout = padView.exportLayout()
+                android.util.Log.i("AirMousePad", "layout=" + padView.exportLayout())
+            }, 900)
+        }
 
         // 调试用：adb 里 am start ... --ez gyro true --ez gyrolog true 可免点击开启陀螺仪并打点
         gyro.debugLogging = intent?.getBooleanExtra("gyrolog", false) == true
@@ -285,6 +429,24 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         // （HyperOS 会拦 adb 注入的点击，所以这条只能靠调试开关走）
         if (intent?.getBooleanExtra("retake", false) == true) {
             main.postDelayed({ net.retryNow() }, 600)
+        }
+        // 调试用：--ez micprio false 关掉「开麦时暂停电脑声音」，用来回放/测回音
+        if (intent?.hasExtra("micprio") == true) {
+            val on = intent.getBooleanExtra("micprio", true)
+            prefs.audioMicPriority = on
+            AudioLink.micPriority = on
+            Diag.log("AUDIO", "调试：开麦暂停外放=$on")
+        }
+        // 调试用：--ez mic true / --ez media true 直接开音频（HyperOS 拦 adb 点击，点不到设置里的行）
+        if (intent?.getBooleanExtra("mic", false) == true) {
+            main.postDelayed({ toggleMic() }, 1500)
+        }
+        if (intent?.getBooleanExtra("media", false) == true) {
+            main.postDelayed({ toggleMedia() }, 1500)
+        }
+        // 调试用：--ez padexit true 等于点手柄层右上角的「退出」（点了没反应时用来定位）
+        if (intent?.getBooleanExtra("padexit", false) == true) {
+            main.postDelayed({ exitPadMode() }, 1500)
         }
         // 调试用：--ez nobtauto true 不做「自动连回上次电脑」，用来观察 HID 就绪但未连接时的界面
         if (intent?.getBooleanExtra("nobtauto", false) == true) {
@@ -711,6 +873,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
 
         prefs.mode = mode
         paintModeButtons()
+        applyPadUi()
         if (!enabled) {
             // 停用：彻底从电脑那边消失 —— 蓝牙断开连接、网络停掉
             net.stop()
@@ -739,6 +902,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             net.port = prefs.port
             net.start()
         } else {
+            // WiFi 和手柄共用这条链路：手柄只是把界面换成虚拟手柄，传输照旧走局域网
             hid.close()
             net.stop()
             net.usbMode = false
@@ -746,7 +910,7 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             net.hosts = splitHosts(prefs.host)
             net.port = prefs.port
             if (prefs.host.isBlank()) {
-                statusTitle.text = "WiFi 模式"
+                statusTitle.text = if (mode == Prefs.MODE_PAD) "手柄模式" else "WiFi 模式"
                 statusSub.text = "还没填电脑 IP，点这里设置"
                 setDot(COLOR_WARN)
             } else {
@@ -754,7 +918,164 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             }
         }
         gyro.sensitivity = sensValue()
+        // 音频跟着主链路走：换 IP、换模式、总开关变化都要重新对一遍
+        if (Prefs.isNetwork(mode) && enabled) syncAudioLink()
+        else {
+            if (AudioLink.micRunning) AudioLink.setMic(false, this)
+            if (AudioLink.mediaRunning) AudioLink.setMedia(false)
+        }
         paintEnabledUi()
+    }
+
+    // ------------------------------------------------------------------ 音频
+    // 麦克风 / 电脑声音走单独一条连接（端口 +1 = 47778），跟鼠标那条互不影响：
+    // 开麦的时候鼠标照常用，掉线也各断各的。只有「已启用 + 网络类模式 + 用户开了开关」
+    // 才连，其它情况一律断掉，绝不留后台录音。
+
+    /** 设置抽屉开着的时候用它刷新那两个「开/关」 */
+    private var repaintAudioSheet: (() -> Unit)? = null
+
+    /** 用户点麦克风时先要权限，拿到之后回来接着开 */
+    private var pendingMicEnable = false
+
+    private fun syncAudioLink() {
+        AudioLink.host = net.host
+        AudioLink.port = net.port + 1
+        AudioLink.micPriority = prefs.audioMicPriority
+        val netMode = Prefs.isNetwork(mode)
+        val wantMic = enabled && netMode && prefs.audioMic
+        val wantMedia = enabled && netMode && prefs.audioMedia
+        if (wantMic && !AudioLink.micRunning) {
+            if (hasAudioPermission()) AudioLink.setMic(true, this) else requestAudioPermission()
+        } else if (!wantMic && AudioLink.micRunning) {
+            AudioLink.setMic(false, this)
+        }
+        if (wantMedia && !AudioLink.mediaRunning) AudioLink.setMedia(true)
+        else if (!wantMedia && AudioLink.mediaRunning) AudioLink.setMedia(false)
+    }
+
+    private fun hasAudioPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    private fun requestAudioPermission() {
+        pendingMicEnable = true
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQ_AUDIO)
+    }
+
+    private fun toggleMic() {
+        if (prefs.audioMic) {
+            prefs.audioMic = false
+            AudioLink.setMic(false, this)
+            repaintAudioSheet?.invoke()
+            toast("麦克风已关")
+            return
+        }
+        if (!Prefs.isNetwork(mode)) {
+            toast("麦克风要 WiFi / USB / 手柄模式才能用；蓝牙模式没有这条链路")
+            return
+        }
+        if (!enabled) {
+            toast("先把右上角开关打开")
+            return
+        }
+        if (!hasAudioPermission()) {
+            requestAudioPermission()
+            return
+        }
+        prefs.audioMic = true
+        syncAudioLink()
+        repaintAudioSheet?.invoke()
+        toast("麦克风已开：电脑里的输入设备选「CABLE Output」")
+    }
+
+    private fun toggleMedia() {
+        if (prefs.audioMedia) {
+            prefs.audioMedia = false
+            AudioLink.setMedia(false)
+            repaintAudioSheet?.invoke()
+            toast("电脑声音已关")
+            return
+        }
+        if (!Prefs.isNetwork(mode)) {
+            toast("听电脑声音要 WiFi / USB / 手柄模式")
+            return
+        }
+        if (!enabled) {
+            toast("先把右上角开关打开")
+            return
+        }
+        prefs.audioMedia = true
+        syncAudioLink()
+        repaintAudioSheet?.invoke()
+        toast("开始听电脑声音（延迟约 0.1 秒）")
+    }
+
+    /**
+     * 手柄层的显隐，顺带管横屏。
+     *
+     * 手柄必须横着玩，所以进手柄模式就把 Activity 锁成横屏、退出时交还给系统 ——
+     * 不交还的话用户会卡在横屏里回不去（这个坑其它 App 上很多人都踩过）。
+     * 注意这里只改「要不要显示」，真正的连接是 [applyMode] 里走 WiFi 那条分支建的。
+     */
+    private fun applyPadUi() {
+        val on = enabled && mode == Prefs.MODE_PAD
+        padLayer.visibility = if (on) View.VISIBLE else View.GONE
+        // 手柄层盖住之后，底下那套鼠标界面就该歇着：一是别透出来看着脏，二是省一次整屏重绘
+        findViewById<View>(R.id.content).visibility = if (on) View.GONE else View.VISIBLE
+
+        val want = if (on) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        if (requestedOrientation != want) requestedOrientation = want
+
+        if (!on) {
+            // 离开手柄层：把「按住的键」清掉。电脑端是按最后一次状态保持的，
+            // 不清的话回到鼠标模式后电脑上会一直按着 A 不放。
+            padView.reset()
+            // 顺手退出布局编辑态（会回调一次 onLayoutChanged，把当前布局存下来）
+            if (padView.editMode) setPadEditMode(false)
+        }
+    }
+
+    /**
+     * 电脑端让手柄震一下。游戏给的只有两档强度（大马达/小马达），
+     * 合并成一次震动：强度越大，震得越久越重。
+     */
+    /**
+     * 进出「布局」编辑态。编辑态里手柄不再发报文，只负责让你把控件拖到顺手的位置：
+     * 单指拖动、双指捏合缩放，点「完成」保存到 Prefs（GamepadView 会回调 onLayoutChanged）。
+     */
+    private fun setPadEditMode(on: Boolean) {
+        padView.setEditMode(on)
+        padEdit.text = if (on) "完成" else "布局"
+        padReset.visibility = if (on) View.VISIBLE else View.GONE
+        if (!on) padSizeBar.visibility = View.GONE
+    }
+
+    // 滑条 0..100 ↔ 倍数 0.4..2.5（default = 1.00× 落在 29）
+    private fun progressToScale(p: Int): Float =
+        GamepadView.MIN_SCALE + p / 100f * (GamepadView.MAX_SCALE - GamepadView.MIN_SCALE)
+
+    private fun scaleToProgress(s: Float): Int =
+        ((s - GamepadView.MIN_SCALE) / (GamepadView.MAX_SCALE - GamepadView.MIN_SCALE) * 100f)
+            .toInt().coerceIn(0, 100)
+
+    private fun fmtScale(s: Float): String = String.format(java.util.Locale.US, "%.2f×", s)
+
+    private fun vibratePad(large: Int, small: Int) {
+        val amp = maxOf(large, small)
+        if (amp <= 0) return
+        val v = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
+        if (!v.hasVibrator()) return
+        val ms = 30L + amp * 90L / 255L
+        val strength = (60 + amp * 195 / 255).coerceIn(1, 255)
+        try {
+            v.vibrate(VibrationEffect.createOneShot(ms, strength))
+        } catch (_: Exception) {
+            // 有的机型震动器被系统占用会抛，这里吞掉：震不动不影响玩
+        }
     }
 
     /**
@@ -933,14 +1254,15 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
     private fun modeName(m: Int) = when (m) {
         Prefs.MODE_WIFI -> "WiFi"
         Prefs.MODE_USB -> "USB"
+        Prefs.MODE_PAD -> "手柄"
         else -> "蓝牙"
     }
 
     /** 连接方式下拉：贴着按钮弹出的列表（不是居中弹窗），选中的一行高亮 */
     private fun showModeMenu() {
         // 下拉里只放「模式」。蓝牙的配对/选电脑这类动作挪到状态栏点击里（点左上角那行提示）。
-        val names = arrayOf("蓝牙 HID", "WiFi（填电脑 IP）", "USB（插线即用）")
-        val values = intArrayOf(Prefs.MODE_BT, Prefs.MODE_WIFI, Prefs.MODE_USB)
+        val names = arrayOf("蓝牙 HID", "WiFi（填电脑 IP）", "USB（插线即用）", "手柄（横屏 · 虚拟 Xbox 手柄）")
+        val values = intArrayOf(Prefs.MODE_BT, Prefs.MODE_WIFI, Prefs.MODE_USB, Prefs.MODE_PAD)
         val checked = values.indexOf(mode).coerceAtLeast(0)
         showDropDown(btnModeMenu, names, checked) { which ->
             if (mode != values[which]) {
@@ -949,12 +1271,14 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
                 gyroRestorePending = GYRO_OFF
                 applyMode()
             }
-            if (values[which] == Prefs.MODE_WIFI) {
-                // 选 WiFi 就当场把 IP 填了，省得再去设置里找
+            if (values[which] == Prefs.MODE_WIFI || values[which] == Prefs.MODE_PAD) {
+                // 选 WiFi / 手柄就当场把 IP 填了，省得再去设置里找
                 if (prefs.host.isBlank()) {
                     main.postDelayed({ showNetSettings() }, 260)
-                } else {
+                } else if (values[which] == Prefs.MODE_WIFI) {
                     toast("WiFi：连 " + prefs.host + " · " + prefs.port + "，连不上就点状态栏改")
+                } else {
+                    toast("手柄：连 " + prefs.host + " · " + prefs.port + "，打开开关后横屏玩")
                 }
             }
         }
@@ -1086,6 +1410,11 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             // 失败/异常/被接管时整块状态栏都能点，点了就重新连（不用去翻设置）
             statusBox.isClickable = state == NetInput.State.FAILED ||
                 state == NetInput.State.ERROR || state == NetInput.State.KICKED
+            // 手柄模式：一连上就先把「中立手柄」发过去，电脑端立刻插上虚拟手柄，
+            // 不用等用户先按一个键游戏才认（不然进游戏时手柄列表是空的）
+            if (state == NetInput.State.CONNECTED && mode == Prefs.MODE_PAD) {
+                net.sendPad(0, 0, 0, 0, 0, 0, 0)
+            }
             syncGyroWithLink()
         }
     }
@@ -1701,6 +2030,44 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             recreate()
             toast("外观：" + Prefs.APPEARANCE_NAMES[next])
         }
+        // 音频：麦克风 / 电脑声音。开着的时候点一下就是关，状态直接写在这两行右边
+        val tvAudioMic = v.findViewById<TextView>(R.id.tvAudioMic)
+        val tvAudioMedia = v.findViewById<TextView>(R.id.tvAudioMedia)
+        val accentColor = ContextCompat.getColor(this, R.color.accent)
+        val hintColor = ContextCompat.getColor(this, R.color.hint)
+        fun paintAudio() {
+            tvAudioMic.text = if (prefs.audioMic) "开" else "关"
+            tvAudioMic.setTextColor(if (prefs.audioMic) accentColor else hintColor)
+            tvAudioMedia.text = if (prefs.audioMedia) "开" else "关"
+            tvAudioMedia.setTextColor(if (prefs.audioMedia) accentColor else hintColor)
+        }
+        paintAudio()
+        repaintAudioSheet = { paintAudio() }
+        sheet.setOnDismissListener { repaintAudioSheet = null }
+        v.findViewById<View>(R.id.rowAudioMic).setOnClickListener {
+            toggleMic()
+            // 要权限的情况是异步的，这里先把界面刷一遍，回调回来还会再刷
+            paintAudio()
+        }
+        v.findViewById<View>(R.id.rowAudioMedia).setOnClickListener {
+            toggleMedia()
+            paintAudio()
+        }
+
+        // 开麦时暂停电脑声音：默认开（否则对方听到回声）。关掉就是「边听边说」，建议配耳机
+        val tvAudioPriority = v.findViewById<TextView>(R.id.tvAudioPriority)
+        fun paintPriority() {
+            tvAudioPriority.text = if (prefs.audioMicPriority) "开" else "关"
+            tvAudioPriority.setTextColor(if (prefs.audioMicPriority) accentColor else hintColor)
+        }
+        paintPriority()
+        v.findViewById<View>(R.id.rowAudioPriority).setOnClickListener {
+            prefs.audioMicPriority = !prefs.audioMicPriority
+            AudioLink.micPriority = prefs.audioMicPriority
+            paintPriority()
+            toast(if (prefs.audioMicPriority) "开麦时电脑声音会暂停" else "开麦时也会外放（可能有回声，建议戴耳机）")
+        }
+
         v.findViewById<View>(R.id.rowReset).setOnClickListener {
             sheet.dismiss()
             confirmReset()
@@ -2004,6 +2371,20 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_BT) {
             if (mode == Prefs.MODE_BT) hid.start()
+        } else if (requestCode == REQ_AUDIO) {
+            val ok = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            if (ok && pendingMicEnable) {
+                pendingMicEnable = false
+                prefs.audioMic = true
+                syncAudioLink()
+                repaintAudioSheet?.invoke()
+                toast("麦克风已开：电脑里把输入设备选成「CABLE Output」")
+            } else if (!ok) {
+                pendingMicEnable = false
+                prefs.audioMic = false
+                repaintAudioSheet?.invoke()
+                toast("没给录音权限，麦克风没法用")
+            }
         }
     }
 
@@ -2032,6 +2413,23 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
     override fun onResume() {
         super.onResume()
         if (mode == Prefs.MODE_BT) hid.start()
+    }
+
+    /**
+     * 转屏。清单里把 orientation/screenSize 接了下来，所以系统不会再帮我们重建 Activity ——
+     * 这件事对手柄模式是必须的：一重建就会断线，电脑端的虚拟手柄跟着「拔掉→插入」闪一下，
+     * 游戏里就是「手柄断开」。手柄自己按尺寸排版，转屏只要重新量一遍就够。
+     *
+     * 其它模式反过来：竖屏/横屏是两套布局（layout / layout-land），不重建换不过来，
+     * 所以这里手动 recreate 一次，行为跟以前交给系统做完全一样。
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (mode == Prefs.MODE_PAD) {
+            padLayer.visibility = if (enabled) View.VISIBLE else View.GONE
+        } else {
+            recreate()
+        }
     }
 
     /** 已经在跑的时候再用 am start 送调试参数（不用重启 App，避免反复重连把蓝牙 HID 搞乱）。 */
@@ -2109,7 +2507,32 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
             hideKeyboardPanel()
             return
         }
+        // 手柄模式下「返回」＝退出手柄模式：右上角那个小「退出」万一被手势区/刘海挡住点不到，
+        // 这是条一定能走的路（用户反馈过点了没反应）
+        if (mode == Prefs.MODE_PAD) {
+            exitPadMode()
+            return
+        }
         super.onBackPressed()
+    }
+
+    /** 退出手柄模式，回到 WiFi 控鼠标。点「退出」和按返回键都走这里 */
+    private fun exitPadMode() {
+        if (mode != Prefs.MODE_PAD) return
+        Diag.log("PAD", "退出手柄模式：mode=$mode enabled=$enabled")
+        // 先让「拔手柄」这条报文飞出去，再切模式（切模式会关 socket）
+        // 把 intent 里的调试参数擦掉：退出会改方向 → 系统重建 Activity → onCreate 会把
+        // 上一次 am start 带的 --ei mode 3 / --ez padexit 再执行一遍，把人又拽回手柄模式
+        intent?.removeExtra("mode")
+        intent?.removeExtra("padexit")
+        net.sendPadOff()
+        // 不再延迟切模式：切模式会 closeSocket，但 push() 是把字节交给系统缓冲，拔手柄那条已经发出去了。
+        // （之前用 150ms 延迟，转屏重建会把这条 Runnable 一起丢掉，表现就是「点了退出没反应」）
+        mode = Prefs.MODE_WIFI
+        prefs.mode = mode
+        applyMode()
+        Diag.log("PAD", "退出完成：mode=$mode padLayer=" + padLayer.visibility)
+        toast("已退出手柄模式")
     }
 
     override fun onDestroy() {
@@ -2117,6 +2540,9 @@ class MainActivity : AppCompatActivity(), HidInput.Listener, NetInput.Listener {
         ray.stop()
         hid.close()
         net.stop()
+        // 音频也一起收掉：不留一条后台在收声音的连接
+        AudioLink.setMic(false, this)
+        AudioLink.setMedia(false)
         super.onDestroy()
     }
 

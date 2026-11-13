@@ -1,19 +1,19 @@
 {
     "proto":  1,
-    "versionCode":  77,
-    "versionName":  "1.1.18",
-    "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.18/AirMouse-1.1.18.apk",
-    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.10/AirMouseServer-v1.1.10.zip",
+    "versionCode":  78,
+    "versionName":  "1.1.19",
+    "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.19/AirMouse-1.1.19.apk",
+    "exe":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.11/AirMouseServer-v1.1.11.zip",
     "apk":  {
-                "versionCode":  77,
-                "versionName":  "1.1.18",
-                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.18/AirMouse-1.1.18.apk",
-                "notes":  "· 两台手机连同一台电脑时，后连上的自动接管，先连的那台会提示「已被另一台手机接管」\n· 被接管时点一下状态栏那一行就能马上抢回来，不用重开 App\n· 被接管的那台不会再偷偷重连，两台不会你顶我、我顶你地来回抢\n· WiFi、USB 都能互踢；蓝牙是两台各连一路，互不影响，两台都能用"
+                "versionCode":  78,
+                "versionName":  "1.1.19",
+                "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/app-v1.1.19/AirMouse-1.1.19.apk",
+                "notes":  "新增：手柄模式 —— 手机横过来就是一块虚拟手柄，电脑上会多出一只 Xbox 360 手柄，绝区零这类游戏直接能在设置里选到\n新增：手柄布局能自己调 —— 点右上角「布局」拖动摆放，点某个键再用下面的滑条调大小，随时能一键重置\n新增：手机当电脑麦克风 —— 电脑里把输入设备选成「CABLE Output」，说话就进游戏/语音（安装包会自动装 VB-Cable）\n新增：电脑的声音从手机放出来 —— 延迟一百毫秒左右；开麦时会自动暂停外放，免得对方听到回声（设置里可以关）\n修复：手柄模式点了「退出」退不出来\n修复：电脑声音越听越延迟（有人听到慢了 2 秒），现在最多慢 0.2 秒"
             },
     "server":  {
-                   "version":  "1.1.10",
-                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.10/AirMouseServer-v1.1.10.zip",
-                   "notes":  "· 新手机接上时，电脑端会让上一台先让位，日志里写明「谁接管、谁让位」\n· 修掉了每次连接都误报「接管（?）让位」的小毛病\n· 手机端连上后看到的电脑端版本号会跟这一版对上",
+                   "version":  "1.1.11",
+                   "url":  "https://cdn.jsdelivr.net/gh/Tang-Yongqiang/AirMouse@main/releases/server-v1.1.11/AirMouseServer-v1.1.11.zip",
+                   "notes":  "新增：虚拟 Xbox 手柄（手柄模式用），装完游戏里就能选到\n新增：音频通道 —— 手机麦克风进电脑、电脑声音送到手机（靠 VB-Cable）\n安装包现在会自动装 VB-Cable 和 ViGEmBus 驱动，已经装过的会跳过\n修复：电脑声音越放越延迟",
                    "minForApk":  ""
                },
     "history":  [
@@ -56,8 +56,13 @@
                         "versionCode":  77,
                         "versionName":  "1.1.18",
                         "notes":  "· 两台手机连同一台电脑时，后连上的自动接管，先连的那台会提示「已被另一台手机接管」\n· 被接管时点一下状态栏那一行就能马上抢回来，不用重开 App\n· 被接管的那台不会再偷偷重连，两台不会你顶我、我顶你地来回抢\n· WiFi、USB 都能互踢；蓝牙是两台各连一路，互不影响，两台都能用"
+                    },
+                    {
+                        "versionCode":  78,
+                        "versionName":  "1.1.19",
+                        "notes":  "新增：手柄模式 —— 手机横过来就是一块虚拟手柄，电脑上会多出一只 Xbox 360 手柄，绝区零这类游戏直接能在设置里选到\n新增：手柄布局能自己调 —— 点右上角「布局」拖动摆放，点某个键再用下面的滑条调大小，随时能一键重置\n新增：手机当电脑麦克风 —— 电脑里把输入设备选成「CABLE Output」，说话就进游戏/语音（安装包会自动装 VB-Cable）\n新增：电脑的声音从手机放出来 —— 延迟一百毫秒左右；开麦时会自动暂停外放，免得对方听到回声（设置里可以关）\n修复：手柄模式点了「退出」退不出来\n修复：电脑声音越听越延迟（有人听到慢了 2 秒），现在最多慢 0.2 秒"
                     }
                 ],
-    "notes":  "· 两台手机连同一台电脑时，后连上的自动接管，先连的那台会提示「已被另一台手机接管」\n· 被接管时点一下状态栏那一行就能马上抢回来，不用重开 App\n· 被接管的那台不会再偷偷重连，两台不会你顶我、我顶你地来回抢\n· WiFi、USB 都能互踢；蓝牙是两台各连一路，互不影响，两台都能用",
-    "publishedAt":  "2026-11-08"
+    "notes":  "新增：手柄模式 —— 手机横过来就是一块虚拟手柄，电脑上会多出一只 Xbox 360 手柄，绝区零这类游戏直接能在设置里选到\n新增：手柄布局能自己调 —— 点右上角「布局」拖动摆放，点某个键再用下面的滑条调大小，随时能一键重置\n新增：手机当电脑麦克风 —— 电脑里把输入设备选成「CABLE Output」，说话就进游戏/语音（安装包会自动装 VB-Cable）\n新增：电脑的声音从手机放出来 —— 延迟一百毫秒左右；开麦时会自动暂停外放，免得对方听到回声（设置里可以关）\n修复：手柄模式点了「退出」退不出来\n修复：电脑声音越听越延迟（有人听到慢了 2 秒），现在最多慢 0.2 秒",
+    "publishedAt":  "2026-11-13"
 }

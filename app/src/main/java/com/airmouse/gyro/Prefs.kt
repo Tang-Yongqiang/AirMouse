@@ -14,10 +14,16 @@ class Prefs(context: Context) {
         /** USB：只插数据线，走 adb reverse 建的回环通道（127.0.0.1） */
         const val MODE_USB = 2
 
+        /**
+         * 手柄：手机上摊开一块虚拟手柄，走和 WiFi 一样的 TCP 链路。
+         * 电脑端把它转成一只虚拟 Xbox 手柄（ViGEmBus），游戏里直接认。
+         */
+        const val MODE_PAD = 3
+
         /** 老名字，等同 WiFi（历史代码里还在用） */
         const val MODE_NET = MODE_WIFI
 
-        /** 是不是网络类模式（WiFi / USB 都走 TCP） */
+        /** 是不是网络类模式（WiFi / USB / 手柄都走 TCP） */
         fun isNetwork(mode: Int) = mode != MODE_BT
 
         /** 打字方式：直通键码（自绘键盘，一个键一个 HID 键码） */
@@ -114,4 +120,41 @@ class Prefs(context: Context) {
     var appearance: Int
         get() = sp.getInt("appearance", APPEARANCE_SYSTEM)
         set(v) = sp.edit().putInt("appearance", v).apply()
+
+    /**
+     * 手柄模式的按键布局（用户在「布局」里拖出来的位置和大小）。
+     * 格式见 GamepadView.exportLayout()；空串 = 全用默认布局。
+     */
+    var padLayout: String
+        get() = sp.getString("padLayout", "") ?: ""
+        set(v) = sp.edit().putString("padLayout", v).apply()
+
+    /**
+     * 手机当电脑麦克风（音频通道，默认 47778）。
+     * 关掉就把这条连接彻底断掉，不留后台录音。
+     */
+    var audioMic: Boolean
+        get() = sp.getBoolean("audioMic", false)
+        set(v) = sp.edit().putBoolean("audioMic", v).apply()
+
+    /** 电脑声音送到手机播放 */
+    var audioMedia: Boolean
+        get() = sp.getBoolean("audioMedia", false)
+        set(v) = sp.edit().putBoolean("audioMedia", v).apply()
+
+    /** 电脑声音的音量（0..100，占位给后面的音量条用） */
+    var audioVolume: Int
+        get() = sp.getInt("audioVolume", 100)
+        set(v) = sp.edit().putInt("audioVolume", v).apply()
+
+    /**
+     * 麦克风优先：开麦的时候把手机外放静音。
+     *
+     * 为什么默认开：手机外放电脑声音，麦克风会把这声音一起收进去，
+     * 对方就听到自己的回声。系统 AEC 对这种「非通话外放」不一定压得住，
+     * 最稳的办法就是开麦时干脆不出声（要用外放又不回音，得戴耳机）。
+     */
+    var audioMicPriority: Boolean
+        get() = sp.getBoolean("audioMicPriority", true)
+        set(v) = sp.edit().putBoolean("audioMicPriority", v).apply()
 }

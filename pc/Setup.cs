@@ -1,4 +1,4 @@
-﻿// AirMouse 安装程序（单文件）
+// AirMouse 安装程序（单文件）
 // 编译：csc /target:winexe /codepage:65001 /win32icon:pc\airmouse.ico /resource:dist\AirMouseServer.exe,payload_server /resource:dist\AirMouseHook.dll,payload_hook pc\Setup.cs
 // 说明：
 //  - 安装目录 %LOCALAPPDATA%\AirMouse（不需要管理员也能写，避免每次启动弹 UAC）
@@ -206,6 +206,83 @@ namespace AirMouseSetup
             catch (Exception ex) { return ex.Message; }
         }
 
+        /** 老版本安装器里没有这个资源（比如还没有音频功能时），有就写、没有就跳过 */
+        static bool HasResource(string name)
+        {
+            try { return Assembly.GetExecutingAssembly().GetManifestResourceStream(name) != null; }
+            catch { return false; }
+        }
+
+        // VB-Cable 装好后会落地这个驱动文件，用它判断「要不要装」
+        static string CableDriverPath
+        {
+            get { return Path.Combine(Environment.SystemDirectory, @"drivers\vbaudio_cable64_win7.sys"); }
+        }
+
+        /// <summary>
+        /// 没装 VB-Cable 就静默装一份（安装器本身是提权跑的，驱动能直接装）。
+        /// 返回 null 表示「已装 / 不需要装 / 装好了」，否则返回失败原因。
+        /// </summary>
+        static string EnsureVirtualCable()
+        {
+            try
+            {
+                if (File.Exists(CableDriverPath)) return null;
+                if (!HasResource("payload_cable")) return null;
+
+                string tmp = Path.Combine(Path.GetTempPath(), "AirMouseVBCableSetup.exe");
+                string err = ExtractResource("payload_cable", tmp);
+                if (err != null) return "写出 VB-Cable 安装程序失败：" + err;
+
+                Trace("installing VB-Cable (silent)...");
+                RunCmdWait(tmp, "-i -h", 180000);
+                try { File.Delete(tmp); } catch { }
+                Trace("VB-Cable installer finished");
+                return File.Exists(CableDriverPath) ? null : "VB-Cable 安装程序跑完了，但没看到驱动文件";
+            }
+            catch (Exception ex) { return ex.Message; }
+        }
+
+        /// <summary>
+        /// 没装 ViGEmBus 就静默装一份（虚拟 Xbox 手柄的驱动）。
+        /// 返回 null 表示「已装 / 不需要装 / 装好了」，否则返回失败原因。
+        /// </summary>
+        static string EnsureViGEmBus()
+        {
+            try
+            {
+                if (Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\ViGEmBus") != null)
+                    return null;
+                if (!HasResource("payload_vigem_bus")) return null;
+
+                string tmp = Path.Combine(Path.GetTempPath(), "AirMouseViGEmBusSetup.exe");
+                string err = ExtractResource("payload_vigem_bus", tmp);
+                if (err != null) return "写出 ViGEmBus 安装程序失败：" + err;
+
+                Trace("installing ViGEmBus (silent)...");
+                RunCmdWait(tmp, "/quiet /norestart", 180000);
+                try { File.Delete(tmp); } catch { }
+                Trace("ViGEmBus installer finished");
+                bool ok = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\ViGEmBus") != null;
+                return ok ? null : "ViGEmBus 安装程序跑完了，但没看到服务";
+            }
+            catch (Exception ex) { return ex.Message; }
+        }
+
+        // 等得比 RunCmd 久一些：驱动安装要几十秒
+        static void RunCmdWait(string exe, string args, int timeoutMs)        {
+            try
+            {
+                var psi = new ProcessStartInfo(exe, args);
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                using (var p = Process.Start(psi)) { p.WaitForExit(timeoutMs); }
+            }
+            catch (Exception ex) { Trace("RunCmdWait EX " + ex.Message); }
+        }
+
         static string MakeShortcut(string linkPath, string target)
         {
             try
@@ -218,6 +295,27 @@ namespace AirMouseSetup
                 lnk.Description = "AirMouse 接收端（手机陀螺仪控制电脑）";
                 lnk.IconLocation = target + ",0";
                 lnk.WindowStyle = 1;
+                lnk.Save();
+                return null;
+            }
+            catch (Exception ex) { return ex.Message; }
+        }
+
+        // 通过计划任务启动：schtasks.exe 本身不需要提权，任务以 /rl highest 建，
+        // 所以不弹 UAC、也不留控制台窗口（窗口样式设成最小化，schtasks 一闪而过也看不见）
+        static string MakeTaskShortcut(string linkPath, string taskName)
+        {
+            try
+            {
+                Type t = Type.GetTypeFromProgID("WScript.Shell");
+                dynamic sh = Activator.CreateInstance(t);
+                dynamic lnk = sh.CreateShortcut(linkPath);
+                lnk.TargetPath = Path.Combine(Environment.SystemDirectory, "schtasks.exe");
+                lnk.Arguments = "/run /tn " + taskName;
+                lnk.WorkingDirectory = InstallDir;
+                lnk.IconLocation = ServerExe + ",0";   // 目标变成 schtasks，必须显式给图标
+                lnk.Description = "AirMouse 接收端（以管理员权限运行，不弹 UAC）";
+                lnk.WindowStyle = 7;                   // 7 = 最小化，避免 schtasks 的控制台窗口闪一下
                 lnk.Save();
                 return null;
             }
@@ -240,6 +338,34 @@ namespace AirMouseSetup
                 Trace("extract hook -> " + (err ?? "ok"));
                 if (err != null) return "写出 AirMouseHook.dll 失败：" + err;
 
+                // NAudio 是接收端做麦克风 / 电脑声音要用的库，必须和 exe 放同一个目录，
+                // 否则 AudioBridge 一加载就 DllNotFoundException，音频功能整个不可用。
+                if (HasResource("payload_naudio"))
+                {
+                    err = ExtractResource("payload_naudio", Path.Combine(InstallDir, "NAudio.dll"));
+                    Trace("extract NAudio.dll -> " + (err ?? "ok"));
+                    if (err != null) return "写出 NAudio.dll 失败：" + err;
+                }
+
+                // ViGEmClient.dll 是虚拟手柄（手柄模式）要用的原生库，同样得和 exe 放一起
+                if (HasResource("payload_vigem"))
+                {
+                    err = ExtractResource("payload_vigem", Path.Combine(InstallDir, "ViGEmClient.dll"));
+                    Trace("extract ViGEmClient.dll -> " + (err ?? "ok"));
+                    if (err != null) return "写出 ViGEmClient.dll 失败：" + err;
+                }
+
+                // VB-Cable：麦克风那条路全靠它（手机麦克风 → CABLE Input，
+                // 游戏/语音软件里把输入设备选成「CABLE Output」）。已经装过就跳过。
+                // 装不上不算安装失败——只是音频里的麦克风用不了，其它功能照常。
+                string cable = EnsureVirtualCable();
+                Trace("vb-cable -> " + (cable ?? "ok"));
+
+                // ViGEmBus 驱动：手柄模式要靠它把虚拟 Xbox 手柄插进系统。
+                // 没装就静默装（装完不用重启），装不上也只是手柄模式用不了。
+                string vigem = EnsureViGEmBus();
+                Trace("vigembus -> " + (vigem ?? "ok"));
+
                 // 卸载器单独一份，装进安装目录（「应用和功能」和开始菜单都指向它）
                 string uninstExe = Path.Combine(InstallDir, "uninstall.exe");
                 err = ExtractResource("payload_uninstall", uninstExe);
@@ -252,11 +378,12 @@ namespace AirMouseSetup
                 }
                 catch { }
 
-                // 快捷方式：开始菜单 + 桌面
+                // 快捷方式：开始菜单 + 桌面。目标是 schtasks 而不是 exe ——
+                // exe 带 requireAdministrator 清单，直接双击每次都弹 UAC。
                 string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "AirMouse 接收端.lnk");
                 string desktop = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "AirMouse 接收端.lnk");
-                Trace("lnk startMenu -> " + (MakeShortcut(startMenu, ServerExe) ?? "ok"));
-                Trace("lnk desktop -> " + (MakeShortcut(desktop, ServerExe) ?? "ok"));
+                Trace("lnk startMenu -> " + (MakeTaskShortcut(startMenu, TaskName) ?? "ok"));
+                Trace("lnk desktop -> " + (MakeTaskShortcut(desktop, TaskName) ?? "ok"));
                 // 开始菜单里再放一个「卸载 AirMouse」，跟安装器分开
                 string unLnk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "卸载 AirMouse.lnk");
                 if (File.Exists(uninstExe)) Trace("lnk uninstall -> " + (MakeShortcut(unLnk, uninstExe) ?? "ok"));

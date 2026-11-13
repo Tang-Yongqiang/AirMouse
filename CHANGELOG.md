@@ -2,6 +2,29 @@
 
 > 技术记录，给开发/维护看。普通用户看到的说明在 `update.json` 的 `notes` 里（发版时用 `publish.ps1 -TechNotesFile` 分开写）。
 
+## 1.1.19 · 2026-11-13（电脑端 1.1.11）
+
+**用户可见**
+- 新增：手柄模式 —— 手机横过来就是一块虚拟手柄，电脑上会多出一只 Xbox 360 手柄，绝区零这类游戏直接能在设置里选到
+- 新增：手柄布局能自己调 —— 点右上角「布局」拖动摆放，点某个键再用下面的滑条调大小，随时能一键重置
+- 新增：手机当电脑麦克风 —— 电脑里把输入设备选成「CABLE Output」，说话就进游戏/语音（安装包会自动装 VB-Cable）
+- 新增：电脑的声音从手机放出来 —— 延迟一百毫秒左右；开麦时会自动暂停外放，免得对方听到回声（设置里可以关）
+- 修复：手柄模式点了「退出」退不出来
+- 修复：电脑声音越听越延迟（有人听到慢了 2 秒），现在最多慢 0.2 秒
+
+**技术细节**
+- 协议：主控链路新增 t:"g"（手柄帧 b/lx/ly/rx/ry/lt/rt）、t:"gp"（拔手柄）、t:"v"（电脑→手机震动）；扫描码仍在 t:"k"。"proto" 仍为 1，老客户端不受影响
+- 音频走独立端口 47778（主控 47777 + 1）：握手 {"t":"au","dir":"mic|media"}，回 {"t":"a-ok",...} 或 {"t":"a-err","why":...}；帧 = 4 字节小端长度 + PCM16，媒体方向 20ms 一帧
+- pc/VirtualPad.cs：P/Invoke ViGEmClient（vigem_alloc/connect/target_x360_alloc/target_add/update/get_user_index/register_notification），成功码是 0x20000000 而不是 0
+- 手柄坑：新加的 x360 目标默认报告不是中立，而是 lx=-3356 ly=-1869 rx=-3255 ry=-848；插入后必须先报一帧 lx=1 再报中立帧，否则游戏里右摇杆自带约 10% 偏置、镜头会自己慢慢漂
+- 手柄插入/拔出跟随主控连接：被另一台手机接管时不拔（避免游戏里手柄闪断），只有真正断开才 VirtualPad.Shutdown
+- pc/AudioBridge.cs：麦克风 = BufferedWaveProvider → WaveOutEvent → VB-Cable 的「CABLE Input」；电脑声音 = WasapiLoopbackCapture（默认播放设备；默认是 VB-Cable 时改抓第一块真声卡并写日志，否则会把自己的声音送回去）
+- 音频延迟坑：旧代码在 DataAvailable 回调里同步写 socket，链路抖一下就把积压留在发送缓冲里排不掉，表现为恒定慢 2 秒；改成有界队列（200ms）+ 独立发送线程 + 16KB SO_SNDBUF，超限丢最旧帧，手机端 16KB SO_RCVBUF + tcpNoDelay
+- 回声三层：AudioRecord(VOICE_COMMUNICATION) + AcousticEchoCanceler/NoiseSuppressor、开麦时外放压到 35%、开麦时暂停外放（默认开，可在设置里关）
+- Setup：内嵌 NAudio.dll / ViGEmClient.dll / VBCABLE_Setup_x64.exe / ViGEmBus 安装包，缺驱动时静默装（-i -h / /quiet /norestart），装不上只记 trace 不中断
+- Setup：「AirMouse 接收端」快捷方式改成 schtasks /run /tn AirMouseServer，双击不再弹 UAC、也不留 PowerShell 窗口；卸载快捷方式仍指向 uninstall.exe
+- publish.ps1：剪枝跳过 releases/stable；versionName 保留 $it 后缀；服务器 csc 行补 VirtualPad.cs / AudioBridge.cs / NAudio.dll；安装器资源改用 $setupRes 数组拼接
+
 ## 1.1.18 · 2026-11-08（电脑端 1.1.10）
 
 **用户可见**
