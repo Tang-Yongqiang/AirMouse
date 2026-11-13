@@ -4,8 +4,8 @@
 电脑端**不需要装任何软件**（蓝牙 HID 模式）。
 
 - 包名：`com.airmouse.gyro`
-- 版本：手机端 `1.1.18`（versionCode 77）/ 电脑端 `1.1.10`（两端版本号各自独立，见 `update.json` 里的 `apk` / `server`）
-- 产物：`dist/AirMouse-1.1.18.apk`（已签名，直接装）+ `dist/AirMouseSetup.exe`（电脑端安装程序，内嵌接收端）；发给别人直接给 `dist/AirMouse-1.1.18-发送包.zip`
+- 版本：手机端 `1.1.19`（versionCode 78）/ 电脑端 `1.1.11`（两端版本号各自独立，见 `update.json` 里的 `apk` / `server`）
+- 产物：`dist/AirMouse-1.1.19.apk`（已签名，直接装）+ `dist/AirMouseSetup.exe`（电脑端安装程序，内嵌接收端）；发给别人直接给 `dist/AirMouse-1.1.19-发送包.zip`
 - 最低系统：Android 9（API 28，蓝牙 HID 的起点）；实测 Redmi 23113RKC6C / HyperOS 3（Android 16）、OPPO PKT110 / ColorOS（Android 17）
 - **要改代码或部署到新机器，看 [HANDOFF.md](HANDOFF.md)**（架构、构建环境、调试开关、踩过的坑都在里面）
 
